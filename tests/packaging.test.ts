@@ -121,10 +121,7 @@ describe("npm packaging", () => {
       resolve(root, ".github/workflows/release.yml"),
       "utf8",
     );
-    const check = readFileSync(
-      resolve(root, ".github/workflows/check.yml"),
-      "utf8",
-    );
+    const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
     expect(release).toContain("version: 10.33.4");
     expect(release).toMatch(/^on:\n {2}workflow_dispatch:\n/m);
     expect(release).not.toMatch(/^\s*(push|tags|pull_request|release):/m);
@@ -152,9 +149,10 @@ describe("npm packaging", () => {
     expect(release).not.toContain("NODE_AUTH_TOKEN");
     expect(release).not.toContain("NPM_TOKEN");
     expect(release).not.toContain("pnpm -r publish");
-    expect(check).toContain("version: 10.33.4");
-    expect(check).toContain("pnpm install --frozen-lockfile");
-    expect(check).toContain("pnpm check");
+    expect(ci).toContain("pnpm install --frozen-lockfile");
+    expect(ci).toContain("pnpm lint");
+    expect(ci).toContain("pnpm typecheck");
+    expect(ci).toContain("pnpm test");
   });
 
   it("keeps use client on the player package entry in src and dist", () => {
