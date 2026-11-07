@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bpaksi/talking-avatar/docs/camera-track.schema.json",
+  "title": "talking-avatar camera track v1 (draft)",
+  "description": "One camera track for one moment id, including ~variant ids. See docs/camera-track-contract.md. Status: draft, not locked.",
+  "$defs": {
+    "unitInterval": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "positiveUnitInterval": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/unitInterval",
+          "description": "Crop center x as a fraction of the still width (anchor.json convention)."
+        },
+        "y": {
+          "$ref": "#/$defs/unitInterval",
+          "description": "Crop center y as a fraction of the still height."
+        },
+        "w": {
+          "$ref": "#/$defs/positiveUnitInterval",
+          "description": "Crop width as a fraction of the still width. Must keep the crop inside the still."
+        },
+        "h": {
+          "$ref": "#/$defs/positiveUnitInterval",
+          "description": "Crop height as a fraction of the still height. Must keep the crop inside the still."
+        }
+      }
+    },
+    "cue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "from", "to"],
+      "properties": {
+        "start": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds. Clock is open question 4 in the contract."
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds, >= start. Cues must not overlap."
+        },
+        "from": { "$ref": "#/$defs/frame" },
+        "to": { "$ref": "#/$defs/frame" },
+        "ease": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Interpolation from `from` to `to`. Allowed values are open question 5. Omit when from equals to (a hold)."
+        }
+      }
+    },
+    "cameraTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "still", "cues"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Moment id, including ~variant segments. Unique. Equals the sidecar file stem when the track is a file."
+        },
+        "still": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/).+\\.(webp|jpg|jpeg)$",
+          "description": "Path to the shipped still, relative to the stills root. No absolute paths. Naming this still is how a moment overrides the scene default."
+        },
+        "standeeOff": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, character standees are off for this moment. Default false. Used by .lid-choice and .08."
+        },
+        "opening": {
+          "type": "string",
+          "const": "letterbox-hold-push",
+          "description": "Start on the full-width shot with letterbox bars, hold, then push in. Hold length is open question 6."
+        },
+        "cues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/cue" },
+          "description": "Ordered camera moves. Empty means a static still; standeeOff and opening still apply."
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/cameraTrack" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tracks"],
+      "properties": {
+        "tracks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/cameraTrack" },
+          "description": "Reading-aid catalog. Sidecar vs catalog is open question 2."
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "tracks": [
+    {
+      "id": "n2-burgomasters-funeral.lid-choice",
+      "still": "n2-burgomasters-funeral.lid-choice.webp",
+      "standeeOff": true,
+      "cues": [
+        {
+          "start": 0,
+          "end": 8,
+          "from": { "x": 0.5, "y": 0.52, "w": 0.9, "h": 0.5 },
+          "to": { "x": 0.5, "y": 0.52, "w": 0.9, "h": 0.5 }
+        }
+      ]
+    },
+    {
+      "id": "n2-burgomasters-funeral.08",
+      "still": "n2-burgomasters-funeral.08.webp",
+      "standeeOff": true,
+      "opening": "letterbox-hold-push",
+      "cues": [
+        {
+          "start": 0,
+          "end": 6.4,
+          "from": { "x": 0.5, "y": 0.5, "w": 1, "h": 0.5625 },
+          "to": { "x": 0.46, "y": 0.42, "w": 0.55, "h": 0.31 },
+          "ease": "ease-in-out"
+        }
+      ]
+    },
+    {
+      "id": "n2-burgomasters-funeral.08~no-agnes",
+      "still": "M3.webp",
+      "cues": [
+        {
+          "start": 0,
+          "end": 5.2,
+          "from": { "x": 0.5, "y": 0.48, "w": 0.72, "h": 0.4 },
+          "to": { "x": 0.5, "y": 0.48, "w": 0.72, "h": 0.4 }
+        }
+      ]
+    },
+    {
+      "id": "n2-burgomasters-funeral.08~fight-lost",
+      "still": "M4.webp",
+      "cues": [
+        {
+          "start": 0,
+          "end": 4,
+          "from": { "x": 0.5, "y": 0.5, "w": 0.8, "h": 0.45 },
+          "to": { "x": 0.5, "y": 0.5, "w": 0.8, "h": 0.45 }
+        }
+      ]
+    }
+  ]
+}
