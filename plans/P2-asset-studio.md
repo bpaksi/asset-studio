@@ -176,6 +176,17 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio approve <job> <id>` and `reject <job> <id> --note "<text>"` set the status in the index, and the note also goes to `notes.json`. These are the only ways to set `final` or `rejected`.
   - The store writes content-addressed files and never overwrites. Two runs with the same inputs give one file. Tests use temp folders.
 
+### S3-seam: Command registry and placeholder commands
+- Depends on: S3
+- Touches: packages/cli/src/{bin,render,studio-command}/**, packages/cli/src/export/command.ts, packages/cli/src/index.ts (only to export registry types)
+- Added 2026-11-08 so S4, S5, S7 and S8 can run in parallel without all editing `packages/cli/src/bin/`.
+- Acceptance:
+  - The dispatcher is async (`main` returns `Promise<number>`). Existing commands, usage text, exit codes and tests are unchanged.
+  - A command module exports `{ name, usage, summary, options, run(ctx, args) }` and registers itself; `bin/commands.ts` is the single list of imports a later step extends with one line.
+  - Placeholders: `render <job> [--only voice|picture] [--ai]` (`AS-RENDER-0`), `export <job> --out <folder> [--drafts]` (`AS-EXPORT-0`), `studio` (`AS-STUDIO-0`). Each needs the work folder (`AS-CONFIG-1`), validates its own flags (usage error, exit 2), then fails "not built yet" with exit 1.
+  - `registerRenderer({ kind, ai?, render(ctx, job, paths) })` lets S4, S5 and S6 add renderers from their own folders. `render` runs every registered renderer for the requested kinds, keeps going after a failure, and ends non-zero with the failed count. `--only <kind>` with no renderer for it fails `AS-RENDER-3` naming the kind.
+  - Tests cover each command's flags, the `AS-CONFIG-1` path, the coded failures, and the renderer registry with a fake renderer.
+
 ### S4: Voice (P1 S3)
 - Depends on: S3
 - Touches: packages/cli/src/{tts,voice}/**
@@ -294,7 +305,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 - B0: G0b, then B1 (Bob)
 - B1: S1
 - B2: S2
-- B3: S3
+- B3: S3, then S3-seam (added 2026-11-08 to let B4 run in parallel)
 - B4: S4, S5, S7, S8 (S5 is the only dependency change; merge order: S5, S4, S7, S8)
 - B5: S6
 - B6: S9 (0.2 release; Bloodtower A1 can build against it)
