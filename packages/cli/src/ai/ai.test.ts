@@ -8,6 +8,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,6 +28,7 @@ import {
   createGeminiImageProvider,
   geminiImageFromEnv,
 } from "./gemini.js";
+import { currentMaster } from "./masters.js";
 import type { ImageProvider } from "./provider.js";
 import { createAiRenderer } from "./render.js";
 
@@ -319,7 +321,7 @@ describe("P2-06a: AI mode fills what is missing as drafts", () => {
     // The painting is the AI master, 32x16 (largest profile); the mask asks for that size.
     expect(mask?.size).toEqual({ width: 32, height: 16 });
     const master = await decode(
-      join(work, story, "masters", "glow.n1-house.png"),
+      join(work, story, "masters", "ai", "glow.n1-house.png"),
     );
     expect([master.width, master.height]).toEqual([32, 16]);
     expect(isGrey(master.data)).toBe(true);
@@ -835,5 +837,164 @@ describe("Gemini image provider (mocked fetch) and the key", () => {
     }
     expect(seen.some((b) => b.includes(KEY))).toBe(false);
     expect(readNotesFile()).toEqual({ "painting.b": ["try again"] });
+  });
+});
+
+describe("masks, masters and later plain renders", () => {
+  const glowJob = () =>
+    baseJob({
+      pictures: [
+        {
+          id: "painting.a",
+          kind: "painting",
+          profiles: ["wide"],
+          prompt: "a",
+          glow: true,
+        },
+      ],
+    });
+  const plain = ["render", "asset-job.json"];
+
+  it("keeps AI masters where S5 never reads them", async () => {
+    fakeWith();
+    await run(glowJob());
+    expect(existsSync(join(work, story, "masters", "glow.a.png"))).toBe(false);
+    expect(existsSync(join(work, story, "masters", "ai", "glow.a.png"))).toBe(
+      true,
+    );
+  });
+
+  it("approved AI assets stay final after a plain render", async () => {
+    fakeWith();
+    await run(glowJob());
+    for (const id of ["painting.a", "glow.a"]) {
+      await run(undefined, ["approve", "asset-job.json", id]);
+    }
+    const before = readFileSync(join(work, story, "index.json"), "utf8");
+    const result = await run(undefined, plain);
+    expect(result.code).toBe(0);
+    expect(readFileSync(join(work, story, "index.json"), "utf8")).toBe(before);
+    expect(readIdx()["glow.a"]?.status).toBe("final");
+  });
+
+  it("a rejected AI mask (note cleared) stays rejected after a plain render", async () => {
+    fakeWith();
+    await run(glowJob());
+    await run(undefined, ["reject", "asset-job.json", "glow.a", "--note", "x"]);
+    writeFileSync(join(work, story, "notes.json"), "{}");
+    const result = await run(undefined, plain);
+    expect(result.code).toBe(0);
+    expect(readIdx()["glow.a"]?.status).toBe("rejected");
+  });
+
+  it("a rejected mask with a note is remade once by --ai; only its note is sent; old master kept", async () => {
+    fakeWith();
+    await run(glowJob());
+    const old = readIdx()["glow.a"];
+    await run(undefined, [
+      "reject",
+      "asset-job.json",
+      "glow.a",
+      "--note",
+      "wider glow",
+    ]);
+    const fake = fakeWith();
+    const result = await run(undefined);
+    expect(result.code).toBe(0);
+    expect(fake.calls.map((c) => c.id)).toEqual(["glow.a"]);
+    expect(fake.calls[0]?.notes).toEqual(["wider glow"]);
+    const entry = readIdx()["glow.a"];
+    expect(entry?.status).toBe("draft");
+    expect(entry?.file).not.toBe(old?.file);
+    expect(existsNotes()).toBe(false);
+    expect(readIdx()["painting.a"]?.status).toBe("draft");
+    // The earlier mask file survives in the store.
+    expect(existsSync(join(storeDir(), old?.file ?? "x"))).toBe(true);
+  });
+
+  it("redoing a painting keeps its previous master and remakes its AI mask as a new draft", async () => {
+    fakeWith();
+    await run(glowJob());
+    const oldMask = readIdx()["glow.a"];
+    const oldPainting = readIdx()["painting.a"];
+    await run(undefined, [
+      "reject",
+      "asset-job.json",
+      "painting.a",
+      "--note",
+      "moonlit",
+    ]);
+    const fake = fakeWith();
+    const result = await run(undefined);
+    expect(result.code).toBe(0);
+    expect(fake.calls.map((c) => c.id)).toEqual(["painting.a", "glow.a"]);
+    expect(fake.calls[0]?.notes).toEqual(["moonlit"]);
+    expect(fake.calls[1]?.notes).toEqual([]);
+    expect(readIdx()["painting.a"]?.status).toBe("draft");
+    expect(readIdx()["painting.a"]?.file).not.toBe(oldPainting?.file);
+    expect(readIdx()["glow.a"]?.status).toBe("draft");
+    expect(readIdx()["glow.a"]?.file).not.toBe(oldMask?.file);
+    const names = readdirSync(join(work, story, "masters", "ai"));
+    expect(
+      names.filter((n) => /^painting\.a\.[0-9a-f]{8}\.png$/.test(n)),
+    ).toHaveLength(1);
+    expect(result.out).toContain("kept the previous AI master");
+    expect(
+      currentMaster({ root: join(work, story) } as never, "painting.a"),
+    ).toBe(join(work, story, "masters", "ai", "painting.a.png"));
+  });
+
+  it("does not remake a final mask when its painting is redone, nor when the redo fails", async () => {
+    fakeWith();
+    await run(glowJob());
+    await run(undefined, ["approve", "asset-job.json", "glow.a"]);
+    await run(undefined, [
+      "reject",
+      "asset-job.json",
+      "painting.a",
+      "--note",
+      "n",
+    ]);
+    const failing = fakeWith({ failIds: ["painting.a"] });
+    const failed = await run(undefined);
+    expect(failed.code).toBe(1);
+    expect(failing.calls.map((c) => c.id)).toEqual(["painting.a"]);
+    expect(failed.out).toContain("failed 1");
+    const ok = fakeWith();
+    await run(undefined);
+    expect(ok.calls.map((c) => c.id)).toEqual(["painting.a"]);
+    expect(readIdx()["glow.a"]?.status).toBe("final");
+  });
+
+  it("never replaces a hand-placed mask master", async () => {
+    mkdirSync(join(work, story, "masters"), { recursive: true });
+    const hand = await solid(32, 16, [128, 128, 128]);
+    const handPath = join(work, story, "masters", "glow.a.png");
+    writeFileSync(handPath, hand);
+    fakeWith();
+    await run(glowJob());
+    expect(readFileSync(handPath).equals(hand)).toBe(true);
+  });
+
+  it("picks one current master deterministically after a format change (newest wins)", () => {
+    const masters = join(work, story, "masters");
+    mkdirSync(masters, { recursive: true });
+    writeFileSync(join(masters, "x.a.png"), "p");
+    writeFileSync(join(masters, "x.a.jpg"), "j");
+    const paths = { root: join(work, story) } as never;
+    utimesSync(join(masters, "x.a.png"), 1000, 1000);
+    utimesSync(join(masters, "x.a.jpg"), 2000, 2000);
+    expect(currentMaster(paths, "x.a")).toBe(join(masters, "x.a.jpg"));
+    utimesSync(join(masters, "x.a.png"), 3000, 3000);
+    expect(currentMaster(paths, "x.a")).toBe(join(masters, "x.a.png"));
+  });
+
+  it("rejects empty output, and logs the size the provider returned", async () => {
+    fakeWith({ wrong: { "painting.e": "empty" } });
+    const job = paintingJob(["painting.e", "painting.ok"]);
+    const result = await run(job);
+    expect(result.err).toMatch(/AS-AI-5: painting\.e:.*empty/);
+    expect(readIdx()["painting.e"]).toBeUndefined();
+    expect(result.out).toContain("painting.ok: provider returned 32x16 (png)");
   });
 });

@@ -9,7 +9,7 @@ export type FakeImageOptions = {
   /** Asset IDs whose request throws. */
   failIds?: readonly string[];
   /** Asset IDs that get a deliberately wrong output. */
-  wrong?: Record<string, "size" | "colour" | "garbage">;
+  wrong?: Record<string, "size" | "colour" | "garbage" | "empty">;
   /** Throw this text (for example one that echoes a key) instead of a plain message. */
   failMessage?: string;
 };
@@ -29,6 +29,9 @@ const seedOf = (req: ImageRequest): Buffer =>
         req.style,
         req.notes,
         req.size,
+        req.painting === undefined
+          ? null
+          : createHash("sha256").update(req.painting).digest("hex"),
       ]),
     )
     .digest();
@@ -49,6 +52,7 @@ export function createFakeImageProvider(
         );
       }
       const wrong = options.wrong?.[req.id];
+      if (wrong === "empty") return { image: new Uint8Array(0) };
       if (wrong === "garbage") return { image: Buffer.from("not an image") };
       const width = req.size.width + (wrong === "size" ? 1 : 0);
       const height = req.size.height;
@@ -58,7 +62,7 @@ export function createFakeImageProvider(
         for (let x = 0; x < width; x++) {
           const o = (y * width + x) * 3;
           if (req.kind === "mask") {
-            const v = x < width / 2 ? 255 : 0;
+            const v = x < width * (0.25 + (seed[3] ?? 0) / 512) ? 255 : 0;
             raw[o] = v;
             raw[o + 1] = wrong === "colour" && x === 0 && y === 0 ? 0 : v;
             raw[o + 2] = v;

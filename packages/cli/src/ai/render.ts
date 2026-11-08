@@ -16,7 +16,6 @@ import {
   decodeRgb,
   imageSize,
 } from "../picture/images.js";
-import { keepMaster, mastersDir } from "../picture/render.js";
 import {
   type Renderer,
   type RenderOutcome,
@@ -33,6 +32,7 @@ import {
   writeNotes,
 } from "../store/store.js";
 import { geminiImageFromEnv } from "./gemini.js";
+import { currentMaster, hasAiMaster, keepAiMaster } from "./masters.js";
 import type { ImageInput, ImageProvider, ImageRequest } from "./provider.js";
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -53,21 +53,6 @@ const redactor = (env: Env) => {
 const escapeRe = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\~]/g, "\\$&");
 
-/** `masters/<id>.<ext>` as kept by S5 or by this renderer (not the `<id>.<hash8>.<ext>` archives). */
-function findMaster(paths: WorkPaths, id: string): string | undefined {
-  const dir = mastersDir(paths);
-  let names: string[];
-  try {
-    names = readdirSync(dir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
-  const re = new RegExp(`^${escapeRe(id)}\\.[a-z0-9]+$`);
-  const hit = names.filter((n) => re.test(n)).sort()[0];
-  return hit === undefined ? undefined : join(dir, hit);
-}
-
 const extOf = (format: string | undefined): string =>
   format === "jpeg" ? "jpg" : (format ?? "bin");
 
@@ -77,6 +62,8 @@ type Unit = {
   id: string;
   /** Index keys still missing (one per profile when the asset has 2+). */
   keys: { key: string; profile: string }[];
+  /** A mask remade because its AI painting was: skipped if that painting failed. */
+  follows?: string;
   prompt?: string;
   references: string[];
   subject?: { name: string; mood: string };
@@ -99,6 +86,7 @@ const wanted = (
 };
 
 function planUnits(
+  paths: WorkPaths,
   job: Job,
   index: ReturnType<typeof readIndex>,
   pending: ReturnType<typeof readNotes>,
@@ -148,17 +136,32 @@ function planUnits(
       if (picture.prompt !== undefined) unit.prompt = picture.prompt;
       units.push(unit);
     }
+    const paintingRedone = picture.source === undefined && keys.length > 0;
     const dot = picture.id.indexOf(".");
     if (picture.glow === true && dot !== -1) {
       const glowId = `glow.${picture.id.slice(dot + 1)}`;
-      const maskKeys = missing(glowId);
+      let maskKeys = missing(glowId);
+      let follows: string | undefined;
+      // A redone painting also remakes its AI-made mask (never a hand-placed one,
+      // never a final one) so the two stay aligned.
+      if (paintingRedone && hasAiMaster(paths, glowId)) {
+        follows = picture.id;
+        maskKeys = profiles
+          .map((profile) => ({
+            key: profileKey(glowId, profiles, profile),
+            profile,
+          }))
+          .filter(({ key }) => index[key]?.status !== "final");
+      }
       if (maskKeys.length > 0) {
-        units.push({
+        const unit: Unit = {
           kind: "mask",
           id: glowId,
           keys: maskKeys,
           references: [],
-        });
+        };
+        if (follows !== undefined) unit.follows = follows;
+        units.push(unit);
       }
     }
   }
@@ -221,7 +224,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
       assetKeys(job); // fails closed (AS-ID-3) before anything is written
       const redact = redactor(ctx.env);
       const outcome: RenderOutcome = { rendered: 0, failed: 0 };
-      const units = planUnits(job, readIndex(paths), readNotes(paths));
+      const units = planUnits(paths, job, readIndex(paths), readNotes(paths));
       if (units.length === 0) return outcome;
       // A missing key (AS-AI-1) is thrown to `render`, which logs it and counts it.
       const provider = deps.provider(ctx.env);
@@ -234,12 +237,20 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
         );
         const message = text.startsWith(`${id}:`) ? text : `${id}: ${text}`;
         ctx.stderr(`${code}: ${message}\n`);
+        if (error instanceof CliError) {
+          for (const line of error.extraLines) ctx.stderr(`${redact(line)}\n`);
+        }
       };
+      const failedPictures = new Set<string>();
 
       for (const unit of units) {
+        if (unit.follows !== undefined && failedPictures.has(unit.follows)) {
+          continue; // its painting failed and was logged; the old pair stays
+        }
         try {
           await runUnit(unit);
         } catch (error) {
+          if (unit.kind === "picture") failedPictures.add(unit.id);
           fail(unit.id, error);
         }
       }
@@ -261,7 +272,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
           const path =
             paintingId === undefined
               ? undefined
-              : findMaster(paths, paintingId);
+              : currentMaster(paths, paintingId);
           if (path === undefined) {
             throw new CliError(
               "AS-AI-8",
@@ -318,6 +329,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
         let decoded: Dimensions;
         let format: string | undefined;
         try {
+          if (bytes.length === 0) throw new Error("the image is empty");
           decoded = await imageSize(bytes);
           format = (await sharp(bytes).metadata()).format;
         } catch (error) {
@@ -327,6 +339,9 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
           );
         }
 
+        ctx.stdout(
+          `${unit.id}: provider returned ${decoded.width}x${decoded.height} (${format ?? "?"})\n`,
+        );
         const refHashes = request.references.map((r) => sha256(r.bytes));
         const base = {
           renderer: "ai",
@@ -362,7 +377,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
           // Kept as the PNG master a hand-placed mask would be (same path S5 reads).
           const png =
             format === "png" ? bytes : await sharp(bytes).png().toBuffer();
-          keepMaster(ctx, paths, unit.id, `${unit.id}.png`, png);
+          keepAiMaster(ctx, paths, unit.id, "png", png);
           for (const { key, profile } of unit.keys) {
             await commit(key, sent, async () => {
               const target = job.profiles[profile];
@@ -392,7 +407,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
           return;
         }
 
-        keepMaster(ctx, paths, unit.id, `${unit.id}.${extOf(format)}`, bytes);
+        keepAiMaster(ctx, paths, unit.id, extOf(format), bytes);
         const kindOfIndex =
           unit.kind === "still"
             ? "portrait"
