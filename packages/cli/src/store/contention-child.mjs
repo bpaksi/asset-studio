@@ -1,6 +1,6 @@
 // Test support: one real mutation in its own process. Argument: a JSON
 // options string. Prints one JSON line and exits 0 on success, 1 on failure.
-//   op: "approve" | "reject"; work, story, jobPath, id, note
+//   op: "approve" | "reject" | "draft"; work, story, jobPath, id, note
 //   signalDir + role "holder" | "waiter": holder takes the lock, waits until
 //     the waiter has started its own attempt, holds for holdMs, then goes on
 //   lockTimeoutMs: how long to wait for a held lock
@@ -54,6 +54,15 @@ try {
   if (options.op === "approve") needs.approve(job, paths, options.id);
   else if (options.op === "reject")
     needs.reject(job, paths, options.id, options.note);
+  else if (options.op === "draft")
+    store.recordDraft(paths, {
+      id: options.id,
+      kind: "painting",
+      data: new TextEncoder().encode(options.id),
+      ext: "webp",
+      size: { width: 8, height: 4 },
+      inputs: { id: options.id },
+    });
   else throw new Error(`unknown op ${options.op}`);
   console.log(JSON.stringify({ ok: true, elapsedMs: Date.now() - startedAt }));
 } catch (error) {

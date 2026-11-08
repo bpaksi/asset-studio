@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -20,6 +21,7 @@ import {
   storeTestHooks,
   withStoryLock,
   workPaths,
+  writeIndexAndNotes,
 } from "./store.js";
 
 let dir: string;
@@ -196,6 +198,109 @@ describe("withStoryLock", () => {
   afterEach(() => {
     storeTestHooks.lockTimeoutMs = undefined;
     storeTestHooks.beforeCommit = undefined;
+    storeTestHooks.releaseLock = undefined;
+  });
+
+  it("AS-STORE-4 tells the user how to recover", () => {
+    const paths = workPaths(dir, "s");
+    storeTestHooks.lockTimeoutMs = 20;
+    withStoryLock(
+      paths,
+      () => {
+        expect(() => withStoryLock(paths, () => 1)).toThrow(
+          /If no other asset-studio process is running, remove .*\.lock and try again/,
+        );
+      },
+      { create: true },
+    );
+  });
+
+  it("a missing story folder is never written unlocked", () => {
+    const paths = workPaths(dir, "s");
+    let ran = false;
+    expect(() =>
+      withStoryLock(
+        paths,
+        () => {
+          ran = true;
+        },
+        {
+          whenMissing: () => {
+            throw new Error("no such asset");
+          },
+        },
+      ),
+    ).toThrow("no such asset");
+    expect(ran).toBe(false);
+    expect(existsSync(paths.root)).toBe(false);
+    // Without a handler it fails coded, still without running or creating.
+    expect(() => withStoryLock(paths, () => 1)).toThrow(
+      /AS-STORE-5|does not exist/,
+    );
+    expect(existsSync(paths.root)).toBe(false);
+  });
+
+  it("if the folder appears while checking, the body runs under the lock", () => {
+    const paths = workPaths(dir, "s");
+    let lockedDuringBody = false;
+    withStoryLock(
+      paths,
+      () => {
+        lockedDuringBody = existsSync(join(paths.root, ".lock"));
+      },
+      { whenMissing: () => mkdirSync(paths.root) },
+    );
+    expect(lockedDuringBody).toBe(true);
+  });
+
+  it("a failed release keeps the body's own error", () => {
+    const paths = workPaths(dir, "s");
+    storeTestHooks.releaseLock = (lock) => {
+      rmSync(lock, { recursive: true, force: true });
+      throw new Error("release broke");
+    };
+    expect(() =>
+      withStoryLock(
+        paths,
+        () => {
+          throw new Error("body broke");
+        },
+        { create: true },
+      ),
+    ).toThrow("body broke");
+    expect(() => withStoryLock(paths, () => 1, { create: true })).toThrow(
+      /AS-STORE-7|could not be released/,
+    );
+  });
+
+  it("AS-STORE-6: the notes write and the index restore both fail", () => {
+    const paths = workPaths(dir, "s");
+    recordDraft(paths, {
+      id: "sound.x",
+      kind: "k",
+      data: bytes("1"),
+      ext: "wav",
+      size: { seconds: 1 },
+      inputs: { v: 1 },
+    });
+    const entry = readIndex(paths)["sound.x"];
+    if (entry === undefined) throw new Error("seed missing");
+    storeTestHooks.beforeCommit = (path, purpose) => {
+      if (path.endsWith("notes.json") || purpose === "restore") {
+        throw new Error("fault");
+      }
+    };
+    let code = "";
+    try {
+      writeIndexAndNotes(
+        paths,
+        { "sound.x": { ...entry, status: "rejected" } },
+        {},
+      );
+    } catch (error) {
+      code = (error as { code: string }).code;
+    }
+    expect(code).toBe("AS-STORE-6");
   });
 
   it("releases the lock when the body throws", () => {

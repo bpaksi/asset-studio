@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -33,6 +33,9 @@ type Result = {
   };
 };
 
+const children = new Set<ChildProcess>();
+const TEST_TIMEOUT = 20_000;
+
 /** Start a real node subprocess; resolves when it exits. */
 function run(options: Record<string, unknown>): Promise<Result> {
   return new Promise((resolve, reject) => {
@@ -47,6 +50,7 @@ function run(options: Record<string, unknown>): Promise<Result> {
       ],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
+    children.add(proc);
     let out = "";
     let err = "";
     proc.stdout.on("data", (d) => {
@@ -57,6 +61,7 @@ function run(options: Record<string, unknown>): Promise<Result> {
     });
     proc.on("error", reject);
     proc.on("close", (exit) => {
+      children.delete(proc);
       try {
         resolve({ exit, out: JSON.parse(out.trim().split("\n").pop() ?? "") });
       } catch {
@@ -148,7 +153,11 @@ beforeEach(() => {
   draft(other(), "painting.a");
 });
 
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+afterEach(() => {
+  for (const proc of children) proc.kill("SIGKILL");
+  children.clear();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /** Seed the sentinels through the public path, in a subprocess-free way. */
 async function seedSentinels() {
@@ -190,7 +199,7 @@ function expectValidAndConsistent() {
   return { index, notes };
 }
 
-describe("two real processes on one story", () => {
+describe("two real processes on one story", { timeout: TEST_TIMEOUT }, () => {
   it("serialize: concurrent rejects of different ids keep both exact notes", async () => {
     await seedSentinels();
     const untouched = {
@@ -264,6 +273,21 @@ describe("two real processes on one story", () => {
     expect(index["painting.f"]?.status).toBe("final");
   });
 
+  it("serialize: recordDraft of a new id and approve of another both survive", async () => {
+    await seedSentinels();
+    const [holder, waiter] = await Promise.all([
+      run({ ...base(), op: "draft", id: "painting.n", role: "holder" }),
+      run({ ...base(), op: "approve", id: "painting.a", role: "waiter" }),
+    ]);
+    expect([holder.exit, waiter.exit]).toEqual([0, 0]);
+    expect(waiter.out.elapsedMs).toBeGreaterThanOrEqual(150);
+    const { index } = expectValidAndConsistent();
+    expect(index["painting.n"]?.status).toBe("draft");
+    expect(index["painting.a"]?.status).toBe("final");
+    expect(index["painting.f"]?.status).toBe("final");
+    expect(index["painting.r"]?.status).toBe("rejected");
+  });
+
   it("coded failure: a contender that times out fails with AS-STORE-4, the holder's change survives, and a retry works", async () => {
     await seedSentinels();
     const before = snapshot(paths().store);
@@ -313,7 +337,7 @@ describe("two real processes on one story", () => {
   });
 });
 
-describe("induced commit failure", () => {
+describe("induced commit failure", { timeout: TEST_TIMEOUT }, () => {
   const cases = [
     {
       name: "reject, index.json commit fails",

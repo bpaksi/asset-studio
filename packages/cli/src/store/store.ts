@@ -127,8 +127,9 @@ function readJsonFile<T>(
  * runs once a story lock is held, before the mutation body.
  */
 export const storeTestHooks: {
-  beforeCommit?: (path: string) => void;
+  beforeCommit?: (path: string, purpose: "write" | "restore") => void;
   afterLock?: (lockPath: string) => void;
+  releaseLock?: (lockPath: string) => void;
   lockTimeoutMs?: number;
 } = {};
 
@@ -144,8 +145,11 @@ const sleepSync = (ms: number): void => {
  * directory made atomically with mkdir, so it works across processes). A
  * contender polls until the holder is done; after the timeout it fails with
  * AS-STORE-4 and changes nothing. The lock is always released, including when
- * `fn` throws. If the story folder does not exist yet there is nothing to
- * race on, so `fn` runs unlocked unless `create` is true.
+ * `fn` throws; a failed release never replaces `fn`'s own error (it is
+ * logged as AS-STORE-7), and is thrown as AS-STORE-7 only if `fn` succeeded.
+ * `fn` never runs unlocked. If the story folder does not exist: with `create`
+ * it is made; otherwise `whenMissing` runs (it should throw, e.g. "no such
+ * asset") and the lock is tried again.
  *
  * A process killed while holding the lock leaves `.lock` behind; the
  * AS-STORE-4 message names it. No automatic crash recovery is promised.
@@ -153,19 +157,29 @@ const sleepSync = (ms: number): void => {
 export function withStoryLock<T>(
   paths: WorkPaths,
   fn: () => T,
-  options: { create?: boolean } = {},
+  options: { create?: boolean; whenMissing?: () => void } = {},
 ): T {
   const lock = join(paths.root, ".lock");
   const timeout = storeTestHooks.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
   const deadline = Date.now() + timeout;
   if (options.create === true) mkdirSync(paths.root, { recursive: true });
+  let missing = 0;
   for (;;) {
     try {
       mkdirSync(lock);
       break;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") return fn();
+      if (code === "ENOENT") {
+        options.whenMissing?.();
+        if (options.whenMissing === undefined || ++missing > 3) {
+          throw new CliError(
+            "AS-STORE-5",
+            `Cannot take the story lock ${lock}: the story folder does not exist.`,
+          );
+        }
+        continue;
+      }
       if (code !== "EEXIST") {
         throw new CliError(
           "AS-STORE-5",
@@ -175,26 +189,55 @@ export function withStoryLock<T>(
       if (Date.now() >= deadline) {
         throw new CliError(
           "AS-STORE-4",
-          `Another change to this story is in progress (lock ${lock} held for over ${timeout} ms). Nothing was changed; try again.`,
+          `Another change to this story is in progress (lock ${lock} held for over ${timeout} ms). Nothing was changed; If no other asset-studio process is running, remove ${lock} and try again. Nothing deletes it automatically.`,
         );
       }
       sleepSync(LOCK_POLL_MS);
     }
   }
+  let result: T;
   try {
     storeTestHooks.afterLock?.(lock);
-    return fn();
-  } finally {
-    rmSync(lock, { recursive: true, force: true });
+    result = fn();
+  } catch (error) {
+    try {
+      release(lock);
+    } catch (releaseError) {
+      process.stderr.write(
+        `AS-STORE-7: could not release ${lock}: ${(releaseError as Error).message}\n`,
+      );
+    }
+    throw error;
   }
+  try {
+    release(lock);
+  } catch (releaseError) {
+    throw new CliError(
+      "AS-STORE-7",
+      `The change was saved but the lock ${lock} could not be released: ${(releaseError as Error).message}`,
+    );
+  }
+  return result;
 }
 
-function commitFile(path: string, text: string, runHook: boolean): void {
+function release(lock: string): void {
+  if (storeTestHooks.releaseLock !== undefined) {
+    storeTestHooks.releaseLock(lock);
+    return;
+  }
+  rmSync(lock, { recursive: true, force: true });
+}
+
+function commitFile(
+  path: string,
+  text: string,
+  purpose: "write" | "restore",
+): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${randomUUID()}.tmp`;
   try {
     writeFileSync(tmp, text);
-    if (runHook) storeTestHooks.beforeCommit?.(path);
+    storeTestHooks.beforeCommit?.(path, purpose);
     renameSync(tmp, path);
   } catch (error) {
     rmSync(tmp, { force: true });
@@ -207,7 +250,7 @@ function commitFile(path: string, text: string, runHook: boolean): void {
 }
 
 function writeJsonFile(path: string, data: unknown): void {
-  commitFile(path, `${JSON.stringify(data, null, 2)}\n`, true);
+  commitFile(path, `${JSON.stringify(data, null, 2)}\n`, "write");
 }
 
 export const readIndex = (paths: WorkPaths): AssetIndex =>
@@ -240,7 +283,7 @@ export function writeIndexAndNotes(
   } catch (error) {
     try {
       if (before === null) rmSync(paths.index, { force: true });
-      else commitFile(paths.index, before, false);
+      else commitFile(paths.index, before, "restore");
     } catch (restoreError) {
       throw new CliError(
         "AS-STORE-6",

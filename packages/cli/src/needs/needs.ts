@@ -87,10 +87,14 @@ function requireDecidable(job: Job, paths: WorkPaths, id: string) {
 
 /** Set `final`. Only this and `reject` can. */
 export function approve(job: Job, paths: WorkPaths, id: string): void {
-  withStoryLock(paths, () => {
-    const { index, entry } = requireDecidable(job, paths, id);
-    writeIndex(paths, { ...index, [id]: { ...entry, status: "final" } });
-  });
+  withStoryLock(
+    paths,
+    () => {
+      const { index, entry } = requireDecidable(job, paths, id);
+      writeIndex(paths, { ...index, [id]: { ...entry, status: "final" } });
+    },
+    { whenMissing: () => void requireDecidable(job, paths, id) },
+  );
 }
 
 /** Set `rejected`; the note goes to the entry and to `notes.json`. */
@@ -108,7 +112,7 @@ export function reject(
       EXIT_USAGE,
     );
   }
-  withStoryLock(paths, () => {
+  const lockedReject = () => {
     const { index, entry } = requireDecidable(job, paths, id);
     const notes = readNotes(paths);
     const rejected: IndexEntry = {
@@ -121,5 +125,8 @@ export function reject(
       { ...index, [id]: rejected },
       { ...notes, [id]: [...(notes[id] ?? []), text] },
     );
+  };
+  withStoryLock(paths, lockedReject, {
+    whenMissing: () => void requireDecidable(job, paths, id),
   });
 }
