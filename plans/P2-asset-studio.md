@@ -153,8 +153,8 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - The README says what asset-studio is. The asset contract keeps its name and its v2 number.
   - The release workflow publishes the `@asset-studio` names through trusted publishing. Releasing 0.2.0 of formats and player is a manual step for Bob, recorded here. (Bloodtower A1 step 1 can swap its pins as soon as these two are out.)
   - `npm deprecate` text for `@talking-avatar/formats` and `@talking-avatar/player` is written in CHANGELOG, for Bob to run.
-- Result: built on `feat/s1-rename-asset-studio`, stacked on this plan's revision PR (#14). Packages renamed to `@asset-studio/*` at 0.2.0, with exports and tests unchanged. `docs/camera-track-contract.md` and `docs/camera-track.schema.json` keep the old name for now, because open PR #13 edits them; that PR or a follow-up renames them. The P1 plan and the two 0.1.0 handoff notes stay as written, as history.
-- Bob's release (manual): once #14 and S1 are on `main`, run Actions → release → Run workflow on `main`. It publishes `@asset-studio/formats` then `@asset-studio/player` 0.2.0 over OIDC. Then run the two `npm deprecate` lines in CHANGELOG 0.2.0.
+- Result: built on `feat/s1-rename-asset-studio`, after this plan's revision (#14) and the camera-track lock (#13) merged. Packages renamed to `@asset-studio/*` at 0.2.0, with exports and tests unchanged. The camera-track contract and schema carry the new name. The P1 plan and the two 0.1.0 handoff notes stay as written, as history.
+- Bob's release (manual): npm can't add a trusted publisher to a package that doesn't exist yet, so 0.2.0 of `@asset-studio/formats` then `@asset-studio/player` is published by hand from `main` (`pnpm pack`, then `npm publish <tgz> --access public`), as 0.1.0 was. Then add each package's trusted publisher (owner `bpaksi`, repo `asset-studio`, workflow `release.yml`) and run the two `npm deprecate` lines in CHANGELOG 0.2.0. Later versions go through Actions → release on `main`.
 
 ### S2: Job contract, index, notes and camera edits (formats)
 - Depends on: S1
@@ -259,9 +259,11 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S13: `<Painting>` player and the studio's Painting editor
 - Depends on: S9, and talking-avatar PR #13 (camera-track contract v1 locked) merged
-- Touches: packages/player/src/painting/**, packages/studio/src/{painting,portrait}/**, packages/formats/** (camera edits), packages/cli/src/export/**
+- Touches: packages/player/src/painting/**, packages/studio/src/{painting,portrait}/**, packages/formats/** (camera edits), packages/cli/src/export/**, packages/player/example/**
 - Acceptance:
   - `<Painting>` in `@asset-studio/player` plays a picture with a named move from the list above, with an optional glow mask flickering at 1–2 Hz with jitter (never a strobe; steady under reduced motion). A drawn camera track (camera-track contract v1, with PR #13's rulings) is the escape. Unit tests cover each move's start and end frame.
+  - The drawn track follows [camera-track contract v1](../docs/camera-track-contract.md), locked 2026-11-07: a camera clock that, given the moment-clock time, returns the frame (holds, the four `ease` values, the `letterbox-hold-push` prelude, reduced-motion cuts), with unit tests; CSS transforms only; `<Painting>` is a sibling of `<TalkingAvatar>`, never a wrapper. `@asset-studio/formats` exports the camera-object schema and its nine shape rules, with tests. The file and moment-id checks are the consumer's pack loader, not this repo.
+  - Each scene's stills preload before it plays. The player example page (`packages/player/example/`) shows a drawn track, checked on a real iPad; memory and load time are recorded here (settled decision 6).
   - In the studio, the person picks a moment, a move, drags the focus box, picks a speed and previews it. Saving writes `camera.json` in the work folder through the CLI library, never the job (DEC-840). Export copies `camera.json`.
   - Glow masks are painted in the browser with a soft brush, and saved as a greyscale mask at the painting's size.
   - The person drags the chin line on a portrait or mood still, and it saves to the index.

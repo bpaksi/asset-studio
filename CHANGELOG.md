@@ -32,6 +32,7 @@ First release of `@talking-avatar/formats` and `@talking-avatar/player`, for the
 ### Docs
 
 - Camera-track contract v1 **draft** ([issue #7](https://github.com/bpaksi/talking-avatar/issues/7)): optional pan/zoom over a still (`docs/camera-track-contract.md`, JSON Schema, examples). Additive; asset contract v1 stays locked. Not implemented in formats or player. Awaits Bob's approval.
+- Camera-track contract v1 **locked** (2026-11-07): moment clock, closed `ease` set, fixed `letterbox-hold-push` prelude, reduced-motion cuts, objects inline on the consumer's moment (no sidecar, no `id` field), shape rules in formats and file rules in the host loader. Built in P2 S9 inside `<Painting>`.
 
 ### @talking-avatar/formats
 
