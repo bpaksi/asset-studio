@@ -1,6 +1,6 @@
 {
   "name": "@asset-studio/formats",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Asset contract schemas, the avatar folder validator, and lip-sync timing helpers for asset-studio.",
   "license": "MIT",
   "repository": {

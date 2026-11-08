@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "story": "lantern-tale",
+  "source": "sha256:abababababababababababababababababababababababababababababababab",
+  "profiles": {
+    "wide": { "width": 320, "height": 180 },
+    "portrait": { "width": 72, "height": 90 }
+  },
+  "cast": [
+    {
+      "id": "keeper",
+      "name": "The Keeper",
+      "moods": ["neutral"],
+      "portraits": [{ "mood": "neutral", "source": "art/keeper.png" }]
+    }
+  ],
+  "lines": [],
+  "pictures": [
+    {
+      "id": "painting.stair",
+      "kind": "painting",
+      "profiles": ["wide"],
+      "source": "art/stair.png"
+    }
+  ],
+  "moments": [{ "id": "scene-one.01", "picture": "painting.stair" }],
+  "sounds": [{ "id": "sound.door", "kind": "effect", "source": "sfx/door.wav" }]
+}

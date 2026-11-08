@@ -1,8 +1,13 @@
 {
   "name": "@asset-studio/studio",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local web studio for reviewing asset-studio work: look, listen, approve, reject.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bpaksi/asset-studio.git",
+    "directory": "packages/studio"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"

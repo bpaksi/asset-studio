@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
-const packages = ["formats", "cli", "player"] as const;
-const published = ["formats", "player"] as const;
+const packages = ["formats", "player", "cli", "studio"] as const;
+const VERSION = "0.2.1";
 
 type Manifest = {
   version?: string;
@@ -67,11 +67,8 @@ describe("npm packaging", () => {
       expect(manifest.license).toBe("MIT");
       expect(manifest.files).toEqual(["dist", "LICENSE"]);
       expect(manifest.types).toBe("./dist/index.d.ts");
-      if (name === "cli") {
-        expect(manifest.publishConfig?.access).toBeUndefined();
-      } else {
-        expect(manifest.publishConfig?.access).toBe("public");
-      }
+      expect(manifest.private).not.toBe(true);
+      expect(manifest.publishConfig?.access).toBe("public");
       expect(manifest.publishConfig?.types).toBe("./dist/index.d.ts");
       expect(JSON.stringify(manifest.publishConfig?.exports)).not.toContain(
         "development",
@@ -91,12 +88,12 @@ describe("npm packaging", () => {
     }
   });
 
-  it("releases formats and player at 0.2.0 and keeps the cli private", () => {
-    for (const name of published) {
+  it("releases all four packages at one version, public, with a repository", () => {
+    for (const name of packages) {
       const manifest = readJson(
         resolve(root, "packages", name, "package.json"),
       );
-      expect(manifest.version, name).toBe("0.2.0");
+      expect(manifest.version, name).toBe(VERSION);
       expect(manifest.private, name).not.toBe(true);
       expect(manifest.repository, name).toEqual({
         type: "git",
@@ -105,8 +102,12 @@ describe("npm packaging", () => {
       });
     }
     const cli = readJson(resolve(root, "packages/cli/package.json"));
-    expect(cli.private).toBe(true);
-    expect(cli.publishConfig?.access).toBeUndefined();
+    expect(cli.dependencies?.sharp).toBeDefined();
+    expect(cli.dependencies?.["@asset-studio/studio"]).toBeUndefined();
+    expect(cli.peerDependencies?.["@asset-studio/studio"]).toBeUndefined();
+    const studio = readJson(resolve(root, "packages/studio/package.json"));
+    expect(studio.dependencies?.["@asset-studio/cli"]).toBe("workspace:*");
+    expect(studio.dependencies?.["@asset-studio/formats"]).toBe("workspace:*");
     const player = readJson(resolve(root, "packages/player/package.json"));
     expect(player.dependencies?.["@asset-studio/formats"]).toBe("workspace:*");
     // Bloodtower runs React 19.3.0.
@@ -114,7 +115,7 @@ describe("npm packaging", () => {
     expect(player.dependencies?.react).toBeUndefined();
   });
 
-  it("publishes formats then player via OIDC, never from a tag push", () => {
+  it("publishes formats, player, cli, studio via OIDC, never from a tag push", () => {
     const release = readFileSync(
       resolve(root, ".github/workflows/release.yml"),
       "utf8",
@@ -133,15 +134,26 @@ describe("npm packaging", () => {
     expect(release).toContain(
       "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$",
     );
-    expect(release).toContain(
-      "for pkg in packages/formats packages/player; do",
-    );
-    expect(release).not.toContain("packages/cli");
+    expect(
+      release.split(
+        "for pkg in packages/formats packages/player packages/cli packages/studio; do",
+      ).length - 1,
+    ).toBe(3);
+    expect(release).toContain("is already on npm");
+    expect(release).toContain("E404");
+    expect(
+      release.indexOf("playwright install --with-deps chromium"),
+    ).toBeGreaterThan(-1);
+    expect(
+      release.indexOf("playwright install --with-deps chromium"),
+    ).toBeLessThan(release.indexOf("- run: pnpm check"));
+    expect(release).toContain("node scripts/smoke-pack.mjs");
     expect(release).toContain("pack --pack-destination");
     expect(release).toContain(
-      `if npm view "\${name}@\${ver}" version >/dev/null 2>&1; then`,
+      `if view="$(npm view "\${name}@\${ver}" version 2>&1)"; then`,
     );
-    expect(release).toContain('npm publish "$pkgdest"/*.tgz');
+    expect(release).toContain("npm publish ");
+    expect(release).toContain("--access public --provenance");
     expect(release).toContain("--provenance");
     expect(release).not.toContain("pnpm -r run build");
     expect(release).not.toContain("NODE_AUTH_TOKEN");
