@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import { derivedIds, type IndexEntry, type Job } from "@asset-studio/formats";
 
@@ -71,14 +71,49 @@ const isInside = (child: string, parent: string): boolean => {
   return rel === "" || (!rel.startsWith("..") && !rel.startsWith(sep));
 };
 
+/** Real path of `p`, or of its nearest existing ancestor plus the rest. */
+function realish(p: string): string {
+  const abs = resolve(p);
+  const rest: string[] = [];
+  let cur = abs;
+  for (;;) {
+    try {
+      return join(realpathSync(cur), ...rest.reverse());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const up = dirname(cur);
+      if (up === cur) return abs;
+      rest.push(basename(cur));
+      cur = up;
+    }
+  }
+}
+
+/** True when the folder holds an earlier export: a parsed schema 1 index. */
+function isEarlierExport(folder: string): boolean {
+  try {
+    const doc = JSON.parse(
+      readFileSync(join(folder, EXPORT_INDEX_FILE), "utf8"),
+    ) as { schema?: unknown };
+    return doc.schema === 1;
+  } catch {
+    // Not readable or not JSON: it is not an earlier export, and the
+    // caller refuses the folder with AS-EXPORT-3.
+    return false;
+  }
+}
+
 function checkOutFolder(out: string, paths: WorkPaths, jobPath: string): void {
-  if (isInside(out, paths.root)) {
+  const story = realish(paths.root);
+  const work = dirname(story);
+  const job = realish(jobPath);
+  if (isInside(out, work)) {
     throw new CliError(
       "AS-EXPORT-3",
-      `The out folder ${out} is inside the work folder for this story; choose a folder elsewhere.`,
+      `The out folder ${out} is inside the work folder; choose a folder elsewhere.`,
     );
   }
-  if (isInside(paths.root, out) || isInside(jobPath, out)) {
+  if (isInside(work, out) || isInside(story, out) || isInside(job, out)) {
     throw new CliError(
       "AS-EXPORT-3",
       `The out folder ${out} would contain the job file or the work folder; choose another folder.`,
@@ -88,13 +123,10 @@ function checkOutFolder(out: string, paths: WorkPaths, jobPath: string): void {
   if (!statSync(out).isDirectory()) {
     throw new CliError("AS-EXPORT-3", `${out} exists and is not a folder.`);
   }
-  if (
-    readdirSync(out).length > 0 &&
-    !existsSync(join(out, EXPORT_INDEX_FILE))
-  ) {
+  if (readdirSync(out).length > 0 && !isEarlierExport(out)) {
     throw new CliError(
       "AS-EXPORT-3",
-      `${out} is not empty and is not an earlier export (no ${EXPORT_INDEX_FILE}); it was left alone.`,
+      `${out} is not empty and is not an earlier export (no valid ${EXPORT_INDEX_FILE} with schema 1); it was left alone.`,
     );
   }
 }
@@ -113,10 +145,11 @@ export function exportJob(
   outArg: string,
   options: { drafts: boolean },
 ): ExportResult {
-  const out = resolve(outArg);
-  checkOutFolder(out, paths, resolve(jobPath));
+  const out = realish(outArg);
+  checkOutFolder(out, paths, jobPath);
 
   const index = readIndex(paths);
+  const soundIds = new Set(job.sounds.map((x) => x.id));
   const lines = new Map(job.lines.map((l) => [l.id, l]));
   const wanted = options.drafts ? ["final", "draft"] : ["final"];
   const assets: Record<string, ExportEntry> = {};
@@ -132,10 +165,10 @@ export function exportJob(
         `"${key}" is ${entry.status} but its index entry has no valid store file.`,
       );
     }
-    if (match[2] === "wav") {
+    if (match[2] === "wav" && !soundIds.has(id)) {
       throw new CliError(
         "AS-EXPORT-2",
-        `"${key}" points at a WAV; WAVs are masters and are never exported.`,
+        `"${key}" points at a WAV; WAV voice masters are never exported (only a job sound may be a WAV).`,
       );
     }
     const line = lines.get(id);
@@ -180,7 +213,7 @@ export function exportJob(
           `Store file ${file} does not match its name; nothing was exported.`,
         );
       }
-      copyFileSync(from, join(staging, file));
+      writeFileSync(join(staging, file), bytes);
     }
     writeFileSync(
       join(staging, EXPORT_INDEX_FILE),
@@ -191,12 +224,30 @@ export function exportJob(
     try {
       renameSync(staging, out);
     } catch (error) {
-      if (hadPrevious) renameSync(backup, out);
+      if (hadPrevious) {
+        try {
+          renameSync(backup, out);
+        } catch (restoreError) {
+          throw new CliError(
+            "AS-EXPORT-5",
+            `Export failed (${(error as Error).message}) and the previous export could not be restored (${(restoreError as Error).message}). It is in ${backup}; move it back to ${out}.`,
+          );
+        }
+      }
       throw error;
     }
-    if (hadPrevious) rmSync(backup, { recursive: true, force: true });
+    if (hadPrevious) {
+      try {
+        rmSync(backup, { recursive: true, force: true });
+      } catch (cleanError) {
+        throw new CliError(
+          "AS-EXPORT-6",
+          `The new export is in place at ${out}, but the old one could not be deleted (${(cleanError as Error).message}). Delete ${backup} yourself.`,
+        );
+      }
+    }
   } catch (error) {
-    rmSync(staging, { recursive: true, force: true });
+    if (existsSync(staging)) rmSync(staging, { recursive: true, force: true });
     if (error instanceof CliError) throw error;
     throw new CliError(
       "AS-EXPORT-4",

@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,7 @@ import type { Job } from "@asset-studio/formats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { main } from "../bin/cli.js";
-import { approve } from "../needs/needs.js";
+import { approve, reject } from "../needs/needs.js";
 import {
   putFile,
   readIndex,
@@ -39,11 +40,12 @@ const makeJob = (): Job => ({
       id: "count",
       name: "The Count",
       voice: { provider: "gemini-tts", voiceId: "Charon" },
-      moods: ["neutral"],
+      moods: ["neutral", "angry"],
     },
   ],
   lines: [
     { id: "n1-house.02~vo-01", speaker: "count", text: "Come in, late." },
+    { id: "n1-house.03~vo-02", speaker: "count", text: "CAPTION-ONLY-TEXT" },
   ],
   pictures: [
     {
@@ -136,12 +138,23 @@ function seed() {
   draft("sound.door", "effect", "m4a", "door");
   approve(job, paths(), "n1-house.02~vo-01");
   approve(job, paths(), "painting.n1-house");
+  draft("portrait.count", "portrait", "webp", "still-neutral");
+  draft("portrait.count~angry", "portrait", "webp", "still-angry");
+  approve(job, paths(), "portrait.count~angry");
+  reject(job, paths(), "glow.n1-house", "mask too wide");
   setStatus("foe.shade~board", "rejected");
   // masters and a caption record sit beside the store and must never ship
   mkdirSync(join(paths().root, "masters"), { recursive: true });
   writeFileSync(join(paths().root, "masters", "n1-house.02~vo-01.wav"), "RIFF");
   mkdirSync(join(paths().root, "captions"), { recursive: true });
-  writeFileSync(join(paths().root, "captions", "x.json"), "{}");
+  // a caption-only failure: the line stays missing, its record is in captions/
+  writeFileSync(
+    join(paths().root, "captions", "n1-house.03~vo-02.json"),
+    '{"text":"CAPTION-ONLY-TEXT"}',
+  );
+  // settings and a secret-like file in the work folder
+  writeFileSync(join(work, "settings.json"), '{"key":"SECRET-KEY-123"}');
+  writeFileSync(join(paths().root, ".env"), "GEMINI_API_KEY=SECRET-KEY-123");
   return job;
 }
 
@@ -155,12 +168,19 @@ describe("export", () => {
     expect(Object.keys(doc.assets).sort()).toEqual([
       "n1-house.02~vo-01",
       "painting.n1-house",
+      "portrait.count~angry",
     ]);
+    expect(doc.assets["portrait.count~angry"]).toMatchObject({
+      kind: "portrait",
+      status: "final",
+      size: { width: 8, height: 4 },
+    });
     expect(doc.source).toBe(SOURCE);
     const idx = readIndex(paths());
     const files = [
       idx["n1-house.02~vo-01"]?.file,
       idx["painting.n1-house"]?.file,
+      idx["portrait.count~angry"]?.file,
     ] as string[];
     expect(listing(out)).toEqual([...files, "export-index.json"].sort());
     // file name hash and extension match the bytes
@@ -202,15 +222,16 @@ describe("export", () => {
     const on = join(dir, "on");
     await cli(["export", jobPath(), "--out", off]);
     await cli(["export", jobPath(), "--out", on, "--drafts"]);
-    expect(Object.keys(readExport(off).assets)).not.toContain("glow.n1-house");
+    expect(Object.keys(readExport(off).assets)).not.toContain("portrait.count");
     const doc = readExport(on);
     expect(Object.keys(doc.assets).sort()).toEqual([
-      "glow.n1-house",
       "n1-house.02~vo-01",
       "painting.n1-house",
+      "portrait.count",
+      "portrait.count~angry",
       "sound.door",
     ]);
-    expect(doc.assets["glow.n1-house"]?.status).toBe("draft");
+    expect(doc.assets["portrait.count"]?.status).toBe("draft");
     expect(doc.assets["sound.door"]?.size).toEqual({ seconds: 1.5 });
   });
 
@@ -313,18 +334,71 @@ describe("export", () => {
     expect(readFileSync(join(stranger, "keep.txt"), "utf8")).toBe("mine");
   });
 
-  it("refuses a WAV in the index", async () => {
-    seed();
+  const pointAtWav = (id: string, kind: string) => {
     const put = putFile(paths().store, new TextEncoder().encode("w"), "wav");
     const index = readIndex(paths());
-    const entry = index["sound.door"];
+    const entry = index[id];
     if (entry === undefined) throw new Error("seed");
     writeIndex(paths(), {
       ...index,
-      "sound.door": { ...entry, file: put.file, status: "final" },
+      [id]: { ...entry, kind, file: put.file, status: "final" },
     });
+    return put.file;
+  };
+
+  it("refuses a WAV on a voice line", async () => {
+    seed();
+    pointAtWav("n1-house.02~vo-01", "line");
     const r = await cli(["export", jobPath(), "--out", join(dir, "o2")]);
+    expect(r.code).toBe(1);
     expect(r.err).toContain("AS-EXPORT-2");
+  });
+
+  it("exports a job sound in its own WAV format", async () => {
+    seed();
+    const file = pointAtWav("sound.door", "effect");
+    const out = join(dir, "o3");
+    const r = await cli(["export", jobPath(), "--out", out]);
+    expect(r.code).toBe(0);
+    expect(readExport(out).assets["sound.door"]?.file).toBe(file);
+    expect(existsSync(join(out, file))).toBe(true);
+  });
+
+  it("a symlinked alias of the story folder cannot be an out folder", async () => {
+    seed();
+    const alias = join(dir, "alias");
+    symlinkSync(paths().root, alias);
+    const r = await cli(["export", jobPath(), "--out", join(alias, "x")]);
+    expect(r.err).toContain("AS-EXPORT-3");
+    expect(existsSync(join(paths().root, "x"))).toBe(false);
+  });
+
+  it("a job inside an earlier export, reached by an alias, is not deleted", async () => {
+    seed();
+    const out = join(dir, "out");
+    expect((await cli(["export", jobPath(), "--out", out])).code).toBe(0);
+    const inside = join(out, "asset-job.json");
+    writeFileSync(inside, JSON.stringify(makeJob()));
+    const alias = join(dir, "outalias");
+    symlinkSync(out, alias);
+    const r = await cli(["export", inside, "--out", alias]);
+    expect(r.err).toContain("AS-EXPORT-3");
+    expect(existsSync(inside)).toBe(true);
+    // the same through the real path
+    const r2 = await cli(["export", inside, "--out", out]);
+    expect(r2.err).toContain("AS-EXPORT-3");
+    expect(existsSync(inside)).toBe(true);
+  });
+
+  it("a folder whose export-index.json is not schema 1 is not an earlier export", async () => {
+    seed();
+    const odd = join(dir, "odd");
+    mkdirSync(odd);
+    writeFileSync(join(odd, "export-index.json"), "not json");
+    writeFileSync(join(odd, "keep.txt"), "mine");
+    const r = await cli(["export", jobPath(), "--out", odd]);
+    expect(r.err).toContain("AS-EXPORT-3");
+    expect(readFileSync(join(odd, "keep.txt"), "utf8")).toBe("mine");
   });
 
   it("fails AS-CONFIG-1 with no work folder", async () => {
