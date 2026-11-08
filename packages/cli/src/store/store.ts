@@ -149,8 +149,45 @@ export type DraftInput = {
 };
 
 /**
+ * True when the store file exists and its bytes match the hash in its name.
+ * False when it is missing. Throws AS-STORE-1 (touching nothing) when it
+ * exists but is corrupt, or when the name is not a store file name.
+ */
+function artifactIsHealthy(
+  paths: WorkPaths,
+  file: string | null | undefined,
+): boolean {
+  const match = file == null ? null : /^([0-9a-f]{64})\.[a-z0-9]+$/.exec(file);
+  if (file == null || match === null) {
+    throw new CliError(
+      "AS-STORE-1",
+      `Index entry file "${String(file)}" is not a store file name.`,
+    );
+  }
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(join(paths.store, file));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new CliError(
+      "AS-STORE-1",
+      `Cannot read store file ${file}: ${(error as Error).message}`,
+    );
+  }
+  if (sha256(bytes) !== match[1]) {
+    throw new CliError(
+      "AS-STORE-1",
+      `Store file ${file} exists but its content does not match its name.`,
+    );
+  }
+  return true;
+}
+
+/**
  * Record a rendered file as the asset's draft. The same inputs reuse the
- * existing file and leave the status alone; new inputs store a new file, keep
+ * existing file (after checking it is present and intact) and leave the
+ * status alone; a missing file is regenerated as a new draft; a corrupt file
+ * is an error and is never overwritten. New inputs store a new file, keep
  * the old one on disk and put the entry back to `draft`.
  */
 export function recordDraft(
@@ -160,7 +197,11 @@ export function recordDraft(
   const index = readIndex(paths);
   const hash = inputsHash(draft.inputs);
   const current = index[draft.id];
-  if (current !== undefined && current.inputsHash === hash) {
+  if (
+    current !== undefined &&
+    current.inputsHash === hash &&
+    artifactIsHealthy(paths, current.file)
+  ) {
     return { entry: current, reused: true };
   }
   const stored = putFile(paths.store, draft.data, draft.ext);

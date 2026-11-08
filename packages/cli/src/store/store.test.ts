@@ -105,6 +105,65 @@ describe("recordDraft", () => {
     expect(readdirSync(paths.store)).toHaveLength(1);
   });
 
+  const fileOf = (entry: { file?: string | null }): string => {
+    if (!entry.file) throw new Error("entry has no file");
+    return entry.file;
+  };
+
+  const approve = (paths: ReturnType<typeof workPaths>) => {
+    const index = readIndex(paths);
+    writeFileSync(
+      paths.index,
+      JSON.stringify({
+        "painting.n1-house": {
+          ...index["painting.n1-house"],
+          status: "final",
+        },
+      }),
+    );
+  };
+
+  it("healthy cache hit preserves final approval and the file", () => {
+    const paths = workPaths(dir, "dracula");
+    const first = recordDraft(paths, draft("v1", { p: 1 })).entry;
+    approve(paths);
+    const again = recordDraft(paths, draft("v1", { p: 1 }));
+    expect(again.reused).toBe(true);
+    expect(again.entry.status).toBe("final");
+    expect(readIndex(paths)["painting.n1-house"]?.status).toBe("final");
+    expect(readdirSync(paths.store)).toEqual([fileOf(first)]);
+  });
+
+  it("cache hit with a missing artifact regenerates it as a draft", () => {
+    const paths = workPaths(dir, "dracula");
+    const first = recordDraft(paths, draft("v1", { p: 1 })).entry;
+    approve(paths);
+    rmSync(join(paths.store, fileOf(first)));
+    const again = recordDraft(paths, draft("v1", { p: 1 }));
+    expect(again.reused).toBe(false);
+    expect(again.entry.status).toBe("draft");
+    expect(readFileSync(join(paths.store, fileOf(again.entry)), "utf8")).toBe(
+      "v1",
+    );
+    expect(readIndex(paths)["painting.n1-house"]?.file).toBe(again.entry.file);
+  });
+
+  it("cache hit with a corrupt artifact fails and overwrites nothing", () => {
+    const paths = workPaths(dir, "dracula");
+    const first = recordDraft(paths, draft("v1", { p: 1 })).entry;
+    approve(paths);
+    const indexBefore = readFileSync(paths.index, "utf8");
+    writeFileSync(join(paths.store, fileOf(first)), "tampered");
+    expect(() => recordDraft(paths, draft("v1", { p: 1 }))).toThrow(
+      /AS-STORE-1|does not match/,
+    );
+    expect(readFileSync(join(paths.store, fileOf(first)), "utf8")).toBe(
+      "tampered",
+    );
+    expect(readdirSync(paths.store)).toEqual([fileOf(first)]);
+    expect(readFileSync(paths.index, "utf8")).toBe(indexBefore);
+  });
+
   it("new inputs add a file, keep the old one and go back to draft", () => {
     const paths = workPaths(dir, "dracula");
     const first = recordDraft(paths, draft("v1", { p: 1 })).entry;
