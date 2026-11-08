@@ -3,9 +3,7 @@
     "width": 1440,
     "height": 900
   },
-  "listeningSockets": [
-    "127.0.0.1:61412"
-  ],
+  "listeningSockets": ["127.0.0.1:61412"],
   "url": "http://127.0.0.1:61412/",
   "decodedPictures": {
     "painting.stair": "webp 1920x1080",
@@ -16,16 +14,8 @@
   "decodedLine": "m4a (M4A )",
   "decodedSound": "wav",
   "maskPixels": {
-    "lit": [
-      206,
-      213,
-      226
-    ],
-    "painting": [
-      30,
-      60,
-      120
-    ],
+    "lit": [206, 213, 226],
+    "painting": [30, 60, 120],
     "litRect": {
       "x": 1200,
       "y": 300,
