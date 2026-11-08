@@ -62,7 +62,7 @@ export const renderCommand: Command = {
     }
 
     const absJobPath = resolve(ctx.cwd, jobPath);
-    const where = { jobPath: absJobPath, jobDir: dirname(absJobPath) };
+    const where = { jobPath: absJobPath, jobDir: dirname(absJobPath), ai };
     const job = loadJob(absJobPath);
     const paths = workPaths(ctx.workFolder, job.story);
     let rendered = 0;

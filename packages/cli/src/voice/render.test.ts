@@ -56,6 +56,7 @@ async function run(job: Job, d: VoiceDeps, env = {}) {
   const outcome = await createVoiceRenderer(d).render(ctx, job, paths, {
     jobPath: join(dir, "job.json"),
     jobDir: dir,
+    ai: false,
   });
   return { ctx, paths, outcome: outcome as RenderOutcome };
 }
