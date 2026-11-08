@@ -59,7 +59,8 @@ export function parseWav(bytes: Uint8Array): ParsedWav {
       };
     } else if (id === "data") {
       if (format === undefined) throw new Error("data chunk before fmt chunk");
-      const end = Math.min(start + size, buf.length);
+      if (start + size > buf.length) throw new Error("truncated data chunk");
+      const end = start + size;
       const bytesPerFrame = format.channels * 2;
       if (format.channels <= 0 || format.sampleRate <= 0) {
         throw new Error("bad WAV format");

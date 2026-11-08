@@ -87,7 +87,17 @@ function preflight(
     return fail("AS-VOICE-2", `speaker "${line.speaker}" has no voice.`);
   }
   try {
-    audioSplicePlan(line.text);
+    const plan = audioSplicePlan(line.text);
+    const total = plan.reduce(
+      (sum, step) => sum + (step.type === "silence" ? step.seconds : 0),
+      0,
+    );
+    if (!plan.some((step) => step.type === "speech") && total === 0) {
+      return fail(
+        "AS-VOICE-10",
+        "line has no spoken text and no pause, so it would be a 0 s draft.",
+      );
+    }
     const seconds = estimateLineSeconds(line.text);
     if (seconds > MAX_LINE_SECONDS) {
       return fail(
@@ -110,6 +120,18 @@ function preflight(
   };
   if (voice.style !== undefined) result.style = voice.style;
   return result;
+}
+
+/** A WAV that cannot be read is AS-VOICE-6. */
+function decode(wav: Uint8Array): ReturnType<typeof parseWav> {
+  try {
+    return parseWav(wav);
+  } catch (error) {
+    return fail(
+      "AS-VOICE-6",
+      `cannot decode audio: ${(error as Error).message}`,
+    );
+  }
 }
 
 async function renderLine(
@@ -140,7 +162,7 @@ async function renderLine(
     if (voice.style !== undefined) material.style = voice.style;
     const cacheFile = join(
       cacheDir,
-      `${sha256(ttsCacheMaterial(material))}.wav`,
+      `${sha256(`${ttsCacheMaterial(material)}|model=${provider.model ?? ""}`)}.wav`,
     );
     let wav: Uint8Array;
     if (existsSync(cacheFile)) {
@@ -162,7 +184,7 @@ async function renderLine(
         return fail("AS-VOICE-6", "segments disagree on audio format.");
       }
       wav = reply.audio;
-      const probe = parseWav(wav);
+      const probe = decode(wav);
       if (
         probe.sampleRate !== reply.sampleRate ||
         probe.channels !== reply.channels
@@ -175,7 +197,7 @@ async function renderLine(
       writeAtomic(cacheFile, wav);
     }
     format = "wav";
-    const decoded = parseWav(wav);
+    const decoded = decode(wav);
     parts.push({
       type: "speech",
       pcm16: decoded.pcm16,
@@ -207,6 +229,7 @@ async function renderLine(
       provider: voice.provider,
       voiceId: voice.voiceId,
       style: voice.style ?? null,
+      model: provider.model ?? null,
     },
   });
   // A good render replaces an earlier caption-only record.

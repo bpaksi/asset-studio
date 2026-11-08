@@ -6,6 +6,8 @@
 export interface TtsProvider {
   /** The id a job's `voice.provider` names, e.g. `gemini-tts`. */
   id: string;
+  /** The model behind the provider; part of the cache key and the inputs hash. */
+  model?: string;
   /** Known voice ids. Omit to accept any voice id. */
   voices?: readonly string[];
   synthesize(req: { text: string; voiceId: string; style?: string }): Promise<{

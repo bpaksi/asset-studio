@@ -80,19 +80,30 @@ export function createGeminiProvider(options: GeminiOptions): TtsProvider {
       headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = (await response.json().catch(() => ({}))) as Json & {
-      error?: { message?: string };
-    };
+    let json: Json & { error?: { message?: string } } = {};
+    let parseError: unknown;
+    try {
+      json = (await response.json()) as typeof json;
+    } catch (error) {
+      parseError = error;
+    }
     if (!response.ok) {
       throw new Error(
         `Gemini ${model}: ${json.error?.message ?? `HTTP ${response.status}`}`,
+        { cause: parseError },
       );
+    }
+    if (parseError !== undefined) {
+      throw new Error(`Gemini ${model}: reply is not valid JSON`, {
+        cause: parseError,
+      });
     }
     return json;
   }
 
   return {
     id: "gemini-tts",
+    model,
     voices: GEMINI_VOICES,
     async synthesize({ text, voiceId, style }) {
       let data: string | undefined;

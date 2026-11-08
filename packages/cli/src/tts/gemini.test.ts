@@ -126,6 +126,25 @@ describe("Gemini adapter", () => {
     expect((error as Error).message).not.toContain("SECRET");
   });
 
+  it("keeps the cause when the reply is not JSON", async () => {
+    const impl = (async () =>
+      new Response("<html>oops", { status: 200 })) as unknown as typeof fetch;
+    const p = createGeminiProvider({ apiKey: "k", fetch: impl });
+    const error = (await p
+      .synthesize({ text: "x", voiceId: "Kore" })
+      .catch((e: Error) => e)) as Error;
+    expect(error.message).toMatch(/not valid JSON/);
+    expect(error.cause).toBeInstanceOf(Error);
+  });
+
+  it("exposes the model for the cache key", () => {
+    const p = createGeminiProvider({
+      apiKey: "k",
+      model: "gemini-2.5-pro-preview-tts",
+    });
+    expect(p.model).toBe("gemini-2.5-pro-preview-tts");
+  });
+
   it("geminiFromEnv fails AS-VOICE-1 without a key", () => {
     expect(() => geminiFromEnv({})).toThrow(/GEMINI_API_KEY/);
     try {

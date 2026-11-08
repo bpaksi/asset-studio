@@ -195,10 +195,18 @@ describe("P2-04b: pauses", () => {
     expect((masterOf(paths.root, "line.zero").length - 44) / 2).toBe(200);
   });
 
-  it("empty spoken segments make no TTS call", async () => {
-    const fake = fakeProvider("fake-a");
-    await run(makeJob([{ id: "line.blank", text: "   " }]), deps(fake));
-    expect(fake.calls).toHaveLength(0);
+  it("blank text and a zero-length pause-only line fail AS-VOICE-10 with no call", async () => {
+    for (const text of ["   ", "[pause 0]"]) {
+      const fake = fakeProvider("fake-a");
+      const { ctx, paths, outcome } = await run(
+        makeJob([{ id: "line.blank", text }]),
+        deps(fake),
+      );
+      expect(fake.calls).toHaveLength(0);
+      expect(outcome).toEqual({ rendered: 0, failed: 1 });
+      expect(ctx.err).toContain("AS-VOICE-10: line.blank");
+      expect(readIndex(paths)["line.blank"]).toBeUndefined();
+    }
   });
 });
 
@@ -239,11 +247,41 @@ describe("P2-04c: cache", () => {
   });
 
   it("a changed line gets a new draft and keeps the old file", async () => {
-    const { paths: _p, ...rest } = await run(
+    const one = fakeProvider("fake-a", { framesFor: () => 1200 });
+    const first = await run(
       makeJob([{ id: "line.c", text: "Hello." }]),
-      deps(fakeProvider("fake-a")),
+      deps(one),
     );
-    expect(rest.outcome.failed).toBe(0);
+    const old = readIndex(first.paths)["line.c"];
+    const oldPath = join(first.paths.store, old?.file ?? "");
+    const oldBytes = readFileSync(oldPath);
+    // A different converter output stands in for different audio.
+    const d = deps(fakeProvider("fake-a"));
+    const other = new Uint8Array([...TINY_M4A, 0]);
+    d.converter = { ...stubConverter, wavToM4a: async () => other };
+    await run(makeJob([{ id: "line.c", text: "Changed." }]), d);
+    const now = readIndex(first.paths)["line.c"];
+    expect(now?.status).toBe("draft");
+    expect(now?.file).not.toBe(old?.file);
+    expect(now?.inputsHash).not.toBe(old?.inputsHash);
+    expect(readFileSync(join(first.paths.store, now?.file ?? ""))).toEqual(
+      Buffer.from(other),
+    );
+    expect(readFileSync(oldPath)).toEqual(oldBytes);
+  });
+
+  it("changing the provider model misses the cache and the inputs hash", async () => {
+    const a = { ...fakeProvider("fake-a"), model: "m1" };
+    const b = fakeProvider("fake-a");
+    (b as { model?: string }).model = "m2";
+    const job = makeJob([{ id: "line.c", text: "Hello." }]);
+    const first = await run(job, deps(a));
+    const h1 = readIndex(first.paths)["line.c"]?.inputsHash;
+    await run(job, deps(a));
+    expect(a.calls).toHaveLength(1);
+    await run(job, deps(b));
+    expect(b.calls).toHaveLength(1);
+    expect(readIndex(first.paths)["line.c"]?.inputsHash).not.toBe(h1);
   });
 });
 
@@ -296,7 +334,7 @@ describe("P2-04d: failures are caption-only", () => {
     expect(existsSync(join(paths.root, "masters", "line.m.wav"))).toBe(false);
   });
 
-  it("a non-WAV format, a decode failure and a header mismatch are caption-only", async () => {
+  it("a non-WAV format and a decode failure are caption-only", async () => {
     for (const [name, opts] of [
       ["ogg", { format: "ogg" as const }],
       ["garbage", { garbage: () => true }],
@@ -312,6 +350,52 @@ describe("P2-04d: failures are caption-only", () => {
       ).toBe(true);
       expect(readIndex(paths)[`line.${name}`]).toBeUndefined();
     }
+  });
+
+  it("garbage, truncated and header-mismatched audio fail AS-VOICE-6", async () => {
+    const good = pcmToWav(new Uint8Array(400), 24000, 1);
+    const cases: [string, Uint8Array, number][] = [
+      ["garbage", new Uint8Array([1, 2, 3, 4]), 24000],
+      ["truncated", good.subarray(0, good.length - 100), 24000],
+      ["mismatch", good, 16000], // header says 24000, provider reported 16000
+    ];
+    for (const [name, audio, rate] of cases) {
+      const p = fakeProvider("fake-a");
+      p.synthesize = async () => ({
+        audio,
+        format: "wav",
+        sampleRate: rate,
+        channels: 1,
+      });
+      const { ctx, paths, outcome } = await run(
+        makeJob([{ id: `line.${name}`, text: "Text." }]),
+        deps(p),
+      );
+      expect(outcome.failed, name).toBe(1);
+      expect(ctx.err, name).toContain(`AS-VOICE-6: line.${name}`);
+      expect(
+        existsSync(join(paths.root, "captions", `line.${name}.json`)),
+        name,
+      ).toBe(true);
+      expect(existsSync(join(paths.root, "masters", `line.${name}.wav`))).toBe(
+        false,
+      );
+    }
+  });
+
+  it("a channel-count mismatch fails AS-VOICE-6", async () => {
+    const p = fakeProvider("fake-a");
+    p.synthesize = async () => ({
+      audio: pcmToWav(new Uint8Array(400), 24000, 1),
+      format: "wav",
+      sampleRate: 24000,
+      channels: 2,
+    });
+    const { ctx } = await run(
+      makeJob([{ id: "line.ch", text: "T." }]),
+      deps(p),
+    );
+    expect(ctx.err).toContain("AS-VOICE-6: line.ch");
   });
 
   it("a converter failure is caption-only and leaves no master", async () => {
