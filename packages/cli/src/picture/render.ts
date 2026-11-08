@@ -78,7 +78,7 @@ function readSource(where: RenderJob, id: string, source: string): Buffer {
  * is damaged), it is kept as `masters/<id>.<first 8 hex of its sha256>.<ext>`
  * and the new one takes its place; one line is logged.
  */
-function keepMaster(
+export function keepMaster(
   ctx: CommandContext,
   paths: WorkPaths,
   id: string,
