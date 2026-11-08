@@ -1,0 +1,207 @@
+import { randomUUID } from "node:crypto";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+
+import { derivedIds, type IndexEntry, type Job } from "@asset-studio/formats";
+
+import { CliError } from "../config/errors.js";
+import { readIndex, sha256, type WorkPaths } from "../store/store.js";
+
+export const EXPORT_INDEX_FILE = "export-index.json";
+
+export type ExportEntry = {
+  kind: string;
+  file: string;
+  size: NonNullable<IndexEntry["size"]>;
+  status: "final" | "draft";
+  /** Lines only: from the job. */
+  speaker?: string;
+  text?: string;
+};
+
+export type ExportIndex = {
+  schema: 1;
+  story: string;
+  /** The job's `source` hash, copied unchanged. */
+  source: string;
+  assets: Record<string, ExportEntry>;
+};
+
+type Key = { key: string; id: string; kind: string };
+
+/**
+ * The index key of every asset. A picture with 2+ profiles has one key per
+ * profile, `<id>~<profile>`; one profile keeps the bare id. Same rule as
+ * S5's helper; switch to it once S5 has merged.
+ */
+export function exportKeys(job: Job): Key[] {
+  const pictures = new Map(job.pictures.map((p) => [p.id, p]));
+  const out: Key[] = [];
+  for (const derived of derivedIds(job)) {
+    const picture = pictures.get(derived.id);
+    if (picture !== undefined && picture.profiles.length >= 2) {
+      for (const profile of picture.profiles) {
+        out.push({
+          key: `${derived.id}~${profile}`,
+          id: derived.id,
+          kind: derived.kind,
+        });
+      }
+    } else {
+      out.push({ key: derived.id, id: derived.id, kind: derived.kind });
+    }
+  }
+  return out;
+}
+
+const STORE_NAME = /^([0-9a-f]{64})\.([a-z0-9]+)$/;
+
+const isInside = (child: string, parent: string): boolean => {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !rel.startsWith(sep));
+};
+
+function checkOutFolder(out: string, paths: WorkPaths, jobPath: string): void {
+  if (isInside(out, paths.root)) {
+    throw new CliError(
+      "AS-EXPORT-3",
+      `The out folder ${out} is inside the work folder for this story; choose a folder elsewhere.`,
+    );
+  }
+  if (isInside(paths.root, out) || isInside(jobPath, out)) {
+    throw new CliError(
+      "AS-EXPORT-3",
+      `The out folder ${out} would contain the job file or the work folder; choose another folder.`,
+    );
+  }
+  if (!existsSync(out)) return;
+  if (!statSync(out).isDirectory()) {
+    throw new CliError("AS-EXPORT-3", `${out} exists and is not a folder.`);
+  }
+  if (
+    readdirSync(out).length > 0 &&
+    !existsSync(join(out, EXPORT_INDEX_FILE))
+  ) {
+    throw new CliError(
+      "AS-EXPORT-3",
+      `${out} is not empty and is not an earlier export (no ${EXPORT_INDEX_FILE}); it was left alone.`,
+    );
+  }
+}
+
+export type ExportResult = { exported: number; files: number; out: string };
+
+/**
+ * Copy final (and with `drafts`, draft) assets into `out` and write
+ * `export-index.json`. The folder is built beside `out` and swapped in only
+ * when complete, so a failure leaves a previous export intact.
+ */
+export function exportJob(
+  job: Job,
+  paths: WorkPaths,
+  jobPath: string,
+  outArg: string,
+  options: { drafts: boolean },
+): ExportResult {
+  const out = resolve(outArg);
+  checkOutFolder(out, paths, resolve(jobPath));
+
+  const index = readIndex(paths);
+  const lines = new Map(job.lines.map((l) => [l.id, l]));
+  const wanted = options.drafts ? ["final", "draft"] : ["final"];
+  const assets: Record<string, ExportEntry> = {};
+  const copies = new Map<string, string>();
+
+  for (const { key, id, kind } of exportKeys(job)) {
+    const entry = index[key];
+    if (entry === undefined || !wanted.includes(entry.status)) continue;
+    const match = entry.file === null ? null : STORE_NAME.exec(entry.file);
+    if (entry.file === null || match === null || entry.size === null) {
+      throw new CliError(
+        "AS-EXPORT-2",
+        `"${key}" is ${entry.status} but its index entry has no valid store file.`,
+      );
+    }
+    if (match[2] === "wav") {
+      throw new CliError(
+        "AS-EXPORT-2",
+        `"${key}" points at a WAV; WAVs are masters and are never exported.`,
+      );
+    }
+    const line = lines.get(id);
+    assets[key] = {
+      kind: entry.kind || kind,
+      file: entry.file,
+      size: entry.size,
+      status: entry.status as "final" | "draft",
+      ...(line === undefined ? {} : { speaker: line.speaker, text: line.text }),
+    };
+    copies.set(entry.file, match[1] as string);
+  }
+
+  const doc: ExportIndex = {
+    schema: 1,
+    story: job.story,
+    source: job.source,
+    assets,
+  };
+
+  const parent = dirname(out);
+  mkdirSync(parent, { recursive: true });
+  const tag = randomUUID();
+  const staging = join(parent, `.${tag}.export-tmp`);
+  const backup = join(parent, `.${tag}.export-old`);
+  try {
+    mkdirSync(staging);
+    for (const [file, hash] of copies) {
+      const from = join(paths.store, file);
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(from);
+      } catch (error) {
+        throw new CliError(
+          "AS-EXPORT-2",
+          `Cannot read store file ${file}: ${(error as Error).message}`,
+        );
+      }
+      if (sha256(bytes) !== hash) {
+        throw new CliError(
+          "AS-EXPORT-2",
+          `Store file ${file} does not match its name; nothing was exported.`,
+        );
+      }
+      copyFileSync(from, join(staging, file));
+    }
+    writeFileSync(
+      join(staging, EXPORT_INDEX_FILE),
+      `${JSON.stringify(doc, null, 2)}\n`,
+    );
+    const hadPrevious = existsSync(out);
+    if (hadPrevious) renameSync(out, backup);
+    try {
+      renameSync(staging, out);
+    } catch (error) {
+      if (hadPrevious) renameSync(backup, out);
+      throw error;
+    }
+    if (hadPrevious) rmSync(backup, { recursive: true, force: true });
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    if (error instanceof CliError) throw error;
+    throw new CliError(
+      "AS-EXPORT-4",
+      `Export failed, the previous export was left as it was: ${(error as Error).message}`,
+    );
+  }
+  return { exported: Object.keys(assets).length, files: copies.size, out };
+}
