@@ -11,7 +11,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { main } from "../bin/cli.js";
 import { CliError } from "../config/errors.js";
-import { clearRenderers, type Renderer, registerRenderer } from "./registry.js";
+import {
+  clearRenderers,
+  type Renderer,
+  registerRenderer,
+  resolveJobPath,
+} from "./registry.js";
 
 let dir: string;
 let work: string;
@@ -40,7 +45,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const cli = async (args: string[], withFolder = true) => {
+const cli = async (args: string[], withFolder = true, cwd = dir) => {
   let out = "";
   let err = "";
   const code = await main(
@@ -50,7 +55,7 @@ const cli = async (args: string[], withFolder = true) => {
         PATH: process.env.PATH,
         ASSET_STUDIO_CONFIG_DIR: join(dir, "cfg"),
       },
-      cwd: dir,
+      cwd,
       stdout: (t) => {
         out += t;
       },
@@ -237,5 +242,32 @@ describe("renderer registry", () => {
     expect(r.err).toContain("AS-RENDER-1: voice renderer failed: boom");
     expect(r.err).toContain("AS-RENDER-2: 3 failed.");
     expect(r.out).toBe("rendered 3, failed 3\n");
+  });
+});
+
+describe("render, job folder", () => {
+  it("passes the absolute job path and folder when run from another folder", async () => {
+    const other = join(dir, "elsewhere");
+    mkdirSync(other);
+    let got: { jobPath: string; jobDir: string } | undefined;
+    registerRenderer({
+      kind: "voice",
+      render: (_ctx, _job, _paths, where) => {
+        got = where;
+        return { rendered: 0, failed: 0 };
+      },
+    });
+    const r = await cli(["render", "../asset-job.json"], true, other);
+    expect(r.code).toBe(0);
+    expect(got).toEqual({ jobPath: join(dir, "asset-job.json"), jobDir: dir });
+  });
+});
+
+describe("resolveJobPath", () => {
+  it("joins a relative path to the job folder", () => {
+    expect(resolveJobPath("/a/b", "art/x.png")).toBe("/a/b/art/x.png");
+  });
+  it("keeps an absolute path", () => {
+    expect(resolveJobPath("/a/b", "/c/x.png")).toBe("/c/x.png");
   });
 });

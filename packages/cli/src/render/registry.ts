@@ -1,7 +1,19 @@
+import { isAbsolute, join } from "node:path";
+
 import type { Job } from "@asset-studio/formats";
 
 import type { CommandContext } from "../bin/registry.js";
 import type { WorkPaths } from "../store/store.js";
+
+/** Where the job file is. Both are absolute. */
+export type RenderJob = { jobPath: string; jobDir: string };
+
+/**
+ * Resolve a path written in the job (`art/x.png`, `ref/y.webp`, `sfx/z.wav`)
+ * against the folder that holds `asset-job.json`. Absolute paths stay as they are.
+ */
+export const resolveJobPath = (jobDir: string, p: string): string =>
+  isAbsolute(p) ? p : join(jobDir, p);
 
 export type RenderKind = "voice" | "picture";
 
@@ -13,6 +25,9 @@ export type RenderOutcome = { rendered: number; failed: number };
  * register theirs from their own folder with `registerRenderer`, and `bin/commands.ts`
  * imports that folder; `render/command.ts` is not edited.
  *
+ * - The 4th argument says where the job file is. Resolve every relative path
+ *   in the job with `resolveJobPath(where.jobDir, p)`, never from `ctx.cwd`.
+ *   A renderer that declares fewer parameters still compiles.
  * - `ai: true` renderers run only when `render --ai` is given; the others
  *   always run for their kind.
  * - `render` may return its counts. If it throws, `render` logs the error as
@@ -25,6 +40,7 @@ export type Renderer = {
     ctx: CommandContext,
     job: Job,
     paths: WorkPaths,
+    where: RenderJob,
   ): Promise<RenderOutcome | undefined> | RenderOutcome | undefined;
 };
 
