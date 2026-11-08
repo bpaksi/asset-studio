@@ -1,6 +1,6 @@
 # P2 plan: talking-avatar becomes asset-studio
 
-Status: **revised 2026-11-07, waiting for Bob (G0b)**. Bob approved the first version on 2026-10-28 (G0). This revision brings P2 in line with the Bloodtower rulings made since then: DEC-578, DEC-622, DEC-623, DEC-576, DEC-719, and DEC-839 to DEC-844 from the 2026-11-07 session (Bloodtower AREA-122). It also builds Bloodtower 1.0's path first. No code yet: no step starts until Bob says so.
+Status: **revised 2026-11-07 and approved by Bob (G0b passed), 2026-11-07**. Bob approved the first version on 2026-10-28 (G0). This revision brings P2 in line with the Bloodtower rulings made since then: DEC-578, DEC-622, DEC-623, DEC-576, DEC-719, and DEC-839 to DEC-844 from the 2026-11-07 session (Bloodtower AREA-122). It also builds Bloodtower 1.0's path first. No code yet: no step starts until Bob says so.
 
 ## Goal
 
@@ -139,6 +139,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 - Depends on: G0
 - Touches: plans/P2-asset-studio.md
 - Acceptance: approval is recorded here. It covers the job contract, the ID rules, the move list and the two-release order above. Bloodtower's DEC-844 (proposed) moves to decided with it.
+- Result: Bob approved on 2026-11-07 ("Lets approve both plans"), together with Bloodtower A1's G0b. DEC-844 is decided. Next is B1, Bob's setup.
 
 ---
 
