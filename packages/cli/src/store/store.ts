@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -119,11 +120,137 @@ function readJsonFile<T>(
   }
 }
 
-function writeJsonFile(path: string, data: unknown): void {
+/**
+ * Test seams. Production code never sets these. `beforeCommit` runs after a
+ * JSON file is fully written to its temp name and before it replaces the real
+ * file, so a throw there is a deterministic write/commit failure. `afterLock`
+ * runs once a story lock is held, before the mutation body.
+ */
+export const storeTestHooks: {
+  beforeCommit?: (path: string, purpose: "write" | "restore") => void;
+  afterLock?: (lockPath: string) => void;
+  releaseLock?: (lockPath: string) => void;
+  lockTimeoutMs?: number;
+} = {};
+
+const DEFAULT_LOCK_TIMEOUT_MS = 5000;
+const LOCK_POLL_MS = 10;
+
+const sleepSync = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+
+/**
+ * Run `fn` while holding the story's exclusive lock (`<story>/.lock`, a
+ * directory made atomically with mkdir, so it works across processes). A
+ * contender polls until the holder is done; after the timeout it fails with
+ * AS-STORE-4 and changes nothing. The lock is always released, including when
+ * `fn` throws; a failed release never replaces `fn`'s own error (it is
+ * logged as AS-STORE-7), and is thrown as AS-STORE-7 only if `fn` succeeded.
+ * `fn` never runs unlocked. If the story folder does not exist: with `create`
+ * it is made; otherwise `whenMissing` runs (it should throw, e.g. "no such
+ * asset") and the lock is tried again.
+ *
+ * A process killed while holding the lock leaves `.lock` behind; the
+ * AS-STORE-4 message names it. No automatic crash recovery is promised.
+ */
+export function withStoryLock<T>(
+  paths: WorkPaths,
+  fn: () => T,
+  options: { create?: boolean; whenMissing?: () => void } = {},
+): T {
+  const lock = join(paths.root, ".lock");
+  const timeout = storeTestHooks.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
+  const deadline = Date.now() + timeout;
+  if (options.create === true) mkdirSync(paths.root, { recursive: true });
+  let missing = 0;
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        options.whenMissing?.();
+        if (options.whenMissing === undefined || ++missing > 3) {
+          throw new CliError(
+            "AS-STORE-5",
+            `Cannot take the story lock ${lock}: the story folder does not exist.`,
+          );
+        }
+        continue;
+      }
+      if (code !== "EEXIST") {
+        throw new CliError(
+          "AS-STORE-5",
+          `Cannot take the story lock ${lock}: ${(error as Error).message}`,
+        );
+      }
+      if (Date.now() >= deadline) {
+        throw new CliError(
+          "AS-STORE-4",
+          `Another change to this story is in progress (lock ${lock} held for over ${timeout} ms). Nothing was changed; If no other asset-studio process is running, remove ${lock} and try again. Nothing deletes it automatically.`,
+        );
+      }
+      sleepSync(LOCK_POLL_MS);
+    }
+  }
+  let result: T;
+  try {
+    storeTestHooks.afterLock?.(lock);
+    result = fn();
+  } catch (error) {
+    try {
+      release(lock);
+    } catch (releaseError) {
+      process.stderr.write(
+        `AS-STORE-7: could not release ${lock}: ${(releaseError as Error).message}\n`,
+      );
+    }
+    throw error;
+  }
+  try {
+    release(lock);
+  } catch (releaseError) {
+    throw new CliError(
+      "AS-STORE-7",
+      `The change was saved but the lock ${lock} could not be released: ${(releaseError as Error).message}`,
+    );
+  }
+  return result;
+}
+
+function release(lock: string): void {
+  if (storeTestHooks.releaseLock !== undefined) {
+    storeTestHooks.releaseLock(lock);
+    return;
+  }
+  rmSync(lock, { recursive: true, force: true });
+}
+
+function commitFile(
+  path: string,
+  text: string,
+  purpose: "write" | "restore",
+): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${randomUUID()}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
-  renameSync(tmp, path);
+  try {
+    writeFileSync(tmp, text);
+    storeTestHooks.beforeCommit?.(path, purpose);
+    renameSync(tmp, path);
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    if (error instanceof CliError) throw error;
+    throw new CliError(
+      "AS-STORE-5",
+      `Cannot write ${path}: ${(error as Error).message}`,
+    );
+  }
+}
+
+function writeJsonFile(path: string, data: unknown): void {
+  commitFile(path, `${JSON.stringify(data, null, 2)}\n`, "write");
 }
 
 export const readIndex = (paths: WorkPaths): AssetIndex =>
@@ -137,6 +264,47 @@ export const readNotes = (paths: WorkPaths): Notes =>
 
 export const writeNotes = (paths: WorkPaths, notes: Notes): void =>
   writeJsonFile(paths.notes, notesSchema.parse(notes));
+
+/**
+ * Write the index and notes together (reject). If the second write fails the
+ * first is put back from its previous bytes, so the pair never disagrees; if
+ * that restore fails too, AS-STORE-6 says the pair needs a look.
+ * Call inside `withStoryLock`.
+ */
+export function writeIndexAndNotes(
+  paths: WorkPaths,
+  index: AssetIndex,
+  notes: Notes,
+): void {
+  const before = readFileOrNull(paths.index);
+  writeIndex(paths, index);
+  try {
+    writeNotes(paths, notes);
+  } catch (error) {
+    try {
+      if (before === null) rmSync(paths.index, { force: true });
+      else commitFile(paths.index, before, "restore");
+    } catch (restoreError) {
+      throw new CliError(
+        "AS-STORE-6",
+        `Writing ${paths.notes} failed (${(error as Error).message}) and ${paths.index} could not be restored: ${(restoreError as Error).message}`,
+      );
+    }
+    throw error;
+  }
+}
+
+function readFileOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new CliError(
+      "AS-STORE-3",
+      `Cannot read ${path}: ${(error as Error).message}`,
+    );
+  }
+}
 
 export type DraftInput = {
   id: string;
@@ -191,6 +359,15 @@ function artifactIsHealthy(
  * the old one on disk and put the entry back to `draft`.
  */
 export function recordDraft(
+  paths: WorkPaths,
+  draft: DraftInput,
+): { entry: IndexEntry; reused: boolean } {
+  return withStoryLock(paths, () => recordDraftLocked(paths, draft), {
+    create: true,
+  });
+}
+
+function recordDraftLocked(
   paths: WorkPaths,
   draft: DraftInput,
 ): { entry: IndexEntry; reused: boolean } {
