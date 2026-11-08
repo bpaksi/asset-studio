@@ -78,7 +78,7 @@ function readSource(where: RenderJob, id: string, source: string): Buffer {
  * is damaged), it is kept as `masters/<id>.<first 8 hex of its sha256>.<ext>`
  * and the new one takes its place; one line is logged.
  */
-function keepMaster(
+export function keepMaster(
   ctx: CommandContext,
   paths: WorkPaths,
   id: string,
@@ -220,6 +220,7 @@ async function renderPictures(
         pictureId: picture.id,
         profiles,
         sourceSize,
+        ai: where.ai,
       });
     }
   }
@@ -230,7 +231,12 @@ async function renderGlow(
   job: Job,
   paths: WorkPaths,
   outcome: Outcome,
-  p: { pictureId: string; profiles: string[]; sourceSize: Dimensions },
+  p: {
+    pictureId: string;
+    profiles: string[];
+    sourceSize: Dimensions;
+    ai: boolean;
+  },
 ): Promise<void> {
   const dot = p.pictureId.indexOf(".");
   if (dot === -1) return;
@@ -241,6 +247,15 @@ async function renderGlow(
   try {
     mask = await readMask(glowId, path, { id: p.pictureId, ...p.sourceSize });
   } catch (error) {
+    // No hand-placed mask: under `--ai`, or once AI mode has made one, that is
+    // AI mode's to fill, not a failure. Plain `render` still reports AS-GLOW-2.
+    if (
+      error instanceof CliError &&
+      error.code === "AS-GLOW-2" &&
+      (p.ai || existsSync(join(mastersDir(paths), "ai", `${glowId}.png`)))
+    ) {
+      return;
+    }
     maskError = error;
   }
   for (const profile of p.profiles) {

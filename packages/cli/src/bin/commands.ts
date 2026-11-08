@@ -5,3 +5,4 @@ import "../export/command.js";
 import "../studio-command/command.js";
 import "../picture/render.js";
 import "../voice/render.js";
+import "../ai/render.js";
