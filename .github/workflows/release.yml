@@ -3,7 +3,8 @@ name: release
 # Manual only. Publishes @asset-studio/formats, player, cli and studio, in that
 # order, via npm trusted publishing (GitHub OIDC, workflow release.yml, no
 # environment). This job does not use a registry secret. It refuses to start if
-# any of the four versions is already on npm, so it never half-publishes.
+# any of the four versions is already on npm. If a publish fails part-way, bump
+# all four to the next patch and run again.
 on:
   workflow_dispatch:
 
@@ -47,12 +48,17 @@ jobs:
               echo "::error::${pkg} version ${ver} does not match ${expected}"
               exit 1
             fi
-            if npm view "${name}@${ver}" version >/dev/null 2>&1; then
+            # Only a 404 means "not published". Any other npm error stops the run.
+            if view="$(npm view "${name}@${ver}" version 2>&1)"; then
               echo "::error::${name}@${ver} is already on npm. Bump all four packages to a new version."
+              exit 1
+            elif ! grep -q "E404" <<<"$view"; then
+              echo "::error::npm view ${name}@${ver} failed (not a 404): ${view}"
               exit 1
             fi
           done
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @asset-studio/studio exec playwright install --with-deps chromium
       - run: pnpm check
       - run: node scripts/smoke-pack.mjs
       - name: Publish formats, player, cli, studio with provenance

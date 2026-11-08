@@ -238,10 +238,10 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S9: Release 0.2.x
 - Depends on: S4, S5, S6, S7, S8
-- Touches: CHANGELOG.md, packages/*/package.json
+- Touches: CHANGELOG.md, packages/*/package.json, packages/*/README.md, packages/cli/tsconfig.build.json, .github/workflows/**, docs/releasing.md, examples/**, scripts/**, tests/packaging.test.ts
 - Acceptance:
   - `@asset-studio/cli` and `@asset-studio/studio` are public.
-  - A tagged release publishes all four packages with provenance.
+  - A release run by hand from Actions (`workflow_dispatch` on `main`, no tag) publishes all four packages with provenance.
   - A fresh folder can install from npm and run `needs`, `render` (with the fake providers) and `export` against the repo's example job.
 
 ---
@@ -295,7 +295,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 - Depends on: S11, S12, S13, S14
 - Touches: CHANGELOG.md, packages/*/package.json
 - Acceptance:
-  - A tagged release publishes all four packages with provenance.
+  - A release run by hand from Actions (`workflow_dispatch` on `main`, no tag) publishes all four packages with provenance.
   - A fresh folder can install from npm and run `needs`, `render --only avatar` (with the fake providers and a stub Rhubarb) and `export` against the repo's example job, and the exported avatar passes `validateAvatar`.
 
 ## Bob's setup (B1, before S1)

@@ -140,10 +140,17 @@ describe("npm packaging", () => {
       ).length - 1,
     ).toBe(3);
     expect(release).toContain("is already on npm");
+    expect(release).toContain("E404");
+    expect(
+      release.indexOf("playwright install --with-deps chromium"),
+    ).toBeGreaterThan(-1);
+    expect(
+      release.indexOf("playwright install --with-deps chromium"),
+    ).toBeLessThan(release.indexOf("- run: pnpm check"));
     expect(release).toContain("node scripts/smoke-pack.mjs");
     expect(release).toContain("pack --pack-destination");
     expect(release).toContain(
-      `if npm view "\${name}@\${ver}" version >/dev/null 2>&1; then`,
+      `if view="$(npm view "\${name}@\${ver}" version 2>&1)"; then`,
     );
     expect(release).toContain("npm publish ");
     expect(release).toContain("--access public --provenance");

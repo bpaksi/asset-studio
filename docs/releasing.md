@@ -17,7 +17,7 @@ On npmjs.com, for each of the four packages, add a Trusted Publisher (Settings, 
 Formats and player have theirs. A package must exist on npm before it can have a trusted publisher, so `@asset-studio/cli` and `@asset-studio/studio` need a one-time hand publish of a throwaway version first:
 
 1. On `main` after `pnpm install --frozen-lockfile`, set both to `0.2.1-bootstrap.0` without committing: `(cd packages/cli && npm version 0.2.1-bootstrap.0 --no-git-tag-version)`, and the same in `packages/studio`.
-2. `pnpm --filter ./packages/cli pack --pack-destination /tmp/boot`, the same for studio, then `npm publish <tarball> --access public --tag bootstrap` for each (the tag keeps `latest` empty).
+2. `pnpm --filter ./packages/cli pack --pack-destination /tmp/boot`, the same for studio, then `npm publish <tarball> --access public --tag bootstrap` for each (the `bootstrap` tag keeps this version off `latest` until the 0.2.1 release moves it).
 3. `git checkout packages/cli/package.json packages/studio/package.json`.
 4. Add the Trusted Publishers above to both packages.
 
@@ -29,7 +29,9 @@ After the first OIDC publish succeeds, npm recommends Settings, Publishing acces
 2. Add the section to `CHANGELOG.md`. Merge to `main`.
 3. Run the **Release** workflow (Actions, release, Run workflow, on `main`).
 
-The workflow stops before publishing anything if the four versions differ or if any of the four is already on npm, so it never half-publishes. It then runs `pnpm check` and `node scripts/smoke-pack.mjs`, packs all four, and publishes formats, player, cli, studio in that order. If a publish fails part-way, bump all four to the next patch and run again; do not republish by hand.
+The workflow stops before publishing anything if the four versions differ or if any of the four is already on npm, so a re-run of an already-published version stops early. Only an npm E404 counts as "not published"; any other error stops the run. It then installs Chromium for the studio tests, runs `pnpm check` and `node scripts/smoke-pack.mjs`, packs all four, and publishes formats, player, cli, studio in that order. If a publish fails part-way, some packages are already on npm: bump all four to the next patch and run again; do not republish by hand.
+
+Follow-up, not done: run the workflow in a GitHub environment with required reviewers (and add it to each Trusted Publisher) so a publish needs a second approval.
 
 ## Smoke test
 
