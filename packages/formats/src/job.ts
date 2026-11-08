@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { cameraSchema } from "./camera.js";
+import { type Camera, cameraSchema } from "./camera.js";
 
 /** One kebab-case segment: lowercase letters and digits, hyphen separated. */
 const SEGMENT = "[a-z0-9]+(?:-[a-z0-9]+)*";
@@ -78,12 +78,26 @@ export const jobPictureSchema = z.strictObject({
   glow: z.boolean().optional(),
 });
 
-export const jobMomentSchema = z.strictObject({
-  ...noStatus,
-  id: assetIdSchema,
-  picture: text,
-  camera: cameraSchema.optional(),
-});
+export const jobMomentSchema = z
+  .strictObject({
+    ...noStatus,
+    id: assetIdSchema,
+    picture: text,
+    // Checked below, so every camera issue can name the moment that owns it.
+    camera: z.custom<Camera>(() => true).optional(),
+  })
+  .superRefine((moment, ctx) => {
+    if (moment.camera === undefined) return;
+    const result = cameraSchema.safeParse(moment.camera);
+    if (result.success) return;
+    for (const found of result.error.issues) {
+      ctx.addIssue({
+        code: "custom",
+        message: `moment "${moment.id}": ${found.message}`,
+        path: ["camera", ...found.path],
+      });
+    }
+  });
 
 export const jobSoundSchema = z.strictObject({
   ...noStatus,
@@ -153,6 +167,8 @@ export const jobSchema = z
       });
     }
     job.cast.forEach((member, index) => {
+      // No requested moods: audio-only, no portrait ids at all.
+      if (member.moods.length === 0) return;
       claim(`portrait.${member.id}`, ["cast", index, "id"]);
       for (const mood of new Set(member.moods)) {
         if (mood !== "neutral") {
@@ -213,7 +229,7 @@ export const jobSchema = z
         );
       }
       picture.profiles.forEach((name, p) => {
-        if (job.profiles[name] === undefined) {
+        if (!Object.hasOwn(job.profiles, name)) {
           issue(
             ["pictures", index, "profiles", p],
             `picture "${picture.id}": unknown profile "${name}"`,
@@ -250,8 +266,8 @@ export type DerivedId = {
 };
 
 /**
- * Every asset ID the job implies, in a stable order: per cast member the
- * neutral still `portrait.<speaker>` then `portrait.<speaker>~<mood>` for each
+ * Every asset ID the job implies, in a stable order: per cast member with at
+ * least one mood (none: no portraits) the neutral still `portrait.<speaker>` then `portrait.<speaker>~<mood>` for each
  * other mood; then lines; then each picture followed by its `glow.<entry>`;
  * then sounds. Moments are not assets (no file, no status) and are not listed.
  * Input must have passed `jobSchema`.
@@ -259,6 +275,8 @@ export type DerivedId = {
 export function derivedIds(job: Job): DerivedId[] {
   const out: DerivedId[] = [];
   for (const member of job.cast) {
+    // No requested moods: audio-only, derives no portrait assets.
+    if (member.moods.length === 0) continue;
     out.push({
       id: `portrait.${member.id}`,
       kind: "portrait",

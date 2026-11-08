@@ -288,6 +288,18 @@ describe("jobSchema: negative", () => {
     );
   });
 
+  it("does not reserve portrait ids for a speaker with no requested moods", () => {
+    const job = structuredClone(makeJob()) as any;
+    job.cast[0].moods = [];
+    delete job.cast[0].portraits;
+    for (const line of job.lines) delete line.mood;
+    // A fresh picture, so no moment points at the renamed id.
+    job.pictures.push({ ...job.pictures[1], id: "portrait.keeper" });
+    expect(jobSchema.safeParse(job).success).toBe(true);
+    job.pictures[2].id = "portrait.keeper~angry";
+    expect(jobSchema.safeParse(job).success).toBe(true);
+  });
+
   it("fails a duplicate cast id", () => {
     expectFailure(
       (job) => {
@@ -427,6 +439,48 @@ describe("jobSchema: negative", () => {
     );
   });
 
+  it.each([
+    "constructor",
+    "toString",
+    "hasOwnProperty",
+    "__proto__",
+    "valueOf",
+  ])("fails an inherited object property as a profile (%s)", (name) => {
+    expectFailure(
+      (job) => {
+        job.pictures[1].profiles = ["wide", name];
+      },
+      "pictures.1.profiles.1",
+      "foe.wolf",
+      "unknown profile",
+      name,
+    );
+  });
+
+  it("fails an inherited profile name when only wide is declared", () => {
+    expectFailure(
+      (job) => {
+        job.profiles = { wide: { width: 1920, height: 1080 } };
+        job.pictures[0].profiles = ["constructor"];
+      },
+      "pictures.0.profiles.0",
+      "painting.scene-one",
+      "constructor",
+    );
+  });
+
+  it("accepts an own profile named like an object property", () => {
+    const result = parseWith((job) => {
+      job.profiles = {
+        wide: { width: 1, height: 1 },
+        tall: { width: 1, height: 1 },
+        constructor: { width: 1, height: 1 },
+      };
+      job.pictures[0].profiles = ["constructor"];
+    });
+    expect(issues(result)).toEqual([]);
+  });
+
   it("fails a moment whose picture is not in pictures", () => {
     expectFailure(
       (job) => {
@@ -464,6 +518,39 @@ describe("jobSchema: negative", () => {
       job.moments[0].camera = { move: "push-in", focus };
     }, `moments.0.camera.focus.${field}`);
   });
+
+  const hold = { x: 0.5, y: 0.5, w: 1, h: 1 };
+  it.each([
+    ["move", { move: "zoom" }, "move"],
+    ["speed", { move: "push-in", speed: "ludicrous" }, "speed"],
+    [
+      "focus",
+      { move: "push-in", focus: { x: 1.2, y: 0, w: 1, h: 1 } },
+      "focus.x",
+    ],
+    [
+      "track",
+      {
+        track: {
+          ...track(),
+          cues: [{ start: 2, end: 1, from: hold, to: hold }],
+        },
+      },
+      "track.cues.0.end",
+    ],
+    ["move with track", { move: "push-in", track: track() }, "track"],
+  ])(
+    "names the owning moment and the indexed path on a camera %s failure",
+    (_, camera, tail) => {
+      expectFailure(
+        (job) => {
+          job.moments[1].camera = camera;
+        },
+        `moments.1.camera.${tail}`,
+        'moment "scene-one.02"',
+      );
+    },
+  );
 
   it("fails a job with a status field", () => {
     expectFailure(
@@ -748,6 +835,23 @@ describe("derivedIds", () => {
     expect(
       list.some((d) => d.kind === "line" && d.id.includes("stranger")),
     ).toBe(false);
+  });
+
+  it("derives zero portraits for a speaker with no requested moods, but keeps its lines", () => {
+    const list = ids((job) => {
+      job.cast[0].moods = [];
+      delete job.cast[0].portraits;
+      for (const line of job.lines) delete line.mood;
+    });
+    expect(list.some((d) => d.id.startsWith("portrait.keeper"))).toBe(false);
+    expect(list.filter((d) => d.kind === "line").map((d) => d.id)).toEqual([
+      "scene-one.02~vo-01",
+      "scene-one.03~vo-01",
+    ]);
+    expect(list.filter((d) => d.kind === "portrait").map((d) => d.id)).toEqual([
+      "portrait.stranger",
+      "portrait.stranger~scared",
+    ]);
   });
 
   it("covers a glow picture: glow.<entry> follows its painting, built by asset-studio", () => {

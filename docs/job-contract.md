@@ -92,7 +92,7 @@ Every object is strict: an unknown field is an error.
 | `moments[]` | array | see below |
 | `sounds[]` | array | see below |
 
-**Cast member:** `id` (kebab-case), `name`, `voice` (optional: `provider`, `voiceId`, optional `style`), `captionTheme` (optional), `moods` (every mood the member needs), `portraits[]` (optional: `mood` and a `source` or a `prompt`), `references` (optional). Without a `voice` the member has stills only. A mood with neither a `source` nor a `prompt` is made in AI mode from `references` and the job's `style`, or stays `missing` in studio mode.
+**Cast member:** `id` (kebab-case), `name`, `voice` (optional: `provider`, `voiceId`, optional `style`), `captionTheme` (optional), `moods` (every mood the member needs; empty means audio-only, with no portraits), `portraits[]` (optional: `mood` and a `source` or a `prompt`), `references` (optional). Without a `voice` the member has stills only. A mood with neither a `source` nor a `prompt` is made in AI mode from `references` and the job's `style`, or stays `missing` in studio mode.
 
 **Line:** `id`, `speaker` (a cast `id`), optional `mood` (plays on that mood's avatar; with none, on the neutral one), `text`.
 
@@ -125,11 +125,13 @@ Ids are unique across lines, pictures, moments, sounds and the ids asset-studio 
 
 | Id | When |
 | --- | --- |
-| `portrait.<speaker>` | every cast member: the neutral still, or the neutral avatar |
+| `portrait.<speaker>` | every cast member with at least one mood in `moods`: the neutral still, or the neutral avatar |
 | `portrait.<speaker>~<mood>` | every other mood in `moods`. A mood called `neutral` is `portrait.<speaker>`, never `~neutral` |
 | `glow.<entry>` | a picture with `glow: true`; for `painting.scene-one`, `glow.scene-one` |
 
-`derivedIds(job)` returns, for a job that passed `jobSchema`, every asset the job implies as `{ id, kind, origin }`, in this order: per cast member its portraits, then lines (kind `line`), then each picture followed by its glow mask (kind `glow`), then sounds. `origin` is `job` for an id written in the job and `built` for one asset-studio builds. A picture's and a sound's `kind` is its own label. **Moments are not listed:** they have no file and no status.
+**No requested moods, no portraits.** A cast member whose `moods` is empty derives zero portrait assets, not even the neutral still. This is how an audio-only speaker (the Loremaster, say) stays portrait-free. Its lines still derive, and its `portrait.<speaker>` ids are not reserved, so a picture may use them without a collision.
+
+`derivedIds(job)` returns, for a job that passed `jobSchema`, every asset the job implies as `{ id, kind, origin }`, in this order: per cast member its portraits (none for a member with empty `moods`), then lines (kind `line`), then each picture followed by its glow mask (kind `glow`), then sounds. `origin` is `job` for an id written in the job and `built` for one asset-studio builds. A picture's and a sound's `kind` is its own label. **Moments are not listed:** they have no file and no status.
 
 For the example above: `portrait.keeper`, `portrait.keeper~friendly`, `portrait.keeper~angry`, `portrait.stranger`, `portrait.stranger~scared`, `scene-one.02~vo-01`, `painting.scene-one`, `glow.scene-one`, `foe.wolf`, `sound.door`.
 
@@ -146,12 +148,14 @@ For the example above: `portrait.keeper`, `portrait.keeper~friendly`, `portrait.
 | a line names a mood its speaker lacks | `lines.N.mood` |
 | a portrait names a mood not in its speaker's `moods` | `cast.N.portraits.M.mood` |
 | a picture has neither `source` nor `prompt` | `pictures.N` |
-| a picture names an unknown profile | `pictures.N.profiles.M` |
+| a picture names an unknown profile (only profiles the job itself declares count; `constructor` and other inherited names are unknown) | `pictures.N.profiles.M` |
 | a moment's picture is not in `pictures` | `moments.N.picture` |
 | a camera move or speed is not on the list | `moments.N.camera.move` or `.speed` |
 | a focus box value is outside 0..1 | `moments.N.camera.focus.x` (and `y`, `w`, `h`) |
 | a drawn track breaks camera-track contract v1 | `moments.N.camera.track…` |
 | the job, or anything in it, has a `status` field | the path of that `status` |
+
+Every camera issue keeps its full indexed path and its message starts with `moment "<id>":`, so the moment that owns it is named.
 
 Rules that need the consumer's files (a `source` path exists, a still exists) are not checked here; the consumer's lint and the CLI do that.
 
