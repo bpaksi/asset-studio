@@ -41,7 +41,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@asset-studio/formats": "workspace:*"
+    "@asset-studio/formats": "workspace:*",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
