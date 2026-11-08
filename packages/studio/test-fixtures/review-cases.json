@@ -1,0 +1,84 @@
+{
+  "job": "asset-job.json",
+  "contract": "plans/P2-asset-studio.md (S3, S7, S8 and Shape sections); docs/job-contract.md and docs/export-contract.md do not exist yet",
+  "statuses": ["missing", "draft", "final", "rejected"],
+  "startState": {
+    "scene-a.02~vo-01": "draft",
+    "painting.stair": "draft",
+    "glow.stair": "draft",
+    "portrait.narrator~angry": "draft",
+    "foe.shade": "final",
+    "sound.door": "final",
+    "portrait.narrator": "rejected",
+    "portrait.bystander": "missing"
+  },
+  "builtIds": [
+    "portrait.narrator",
+    "portrait.narrator~angry",
+    "portrait.bystander",
+    "portrait.bystander~scared",
+    "glow.stair"
+  ],
+  "draftDisplay": {
+    "scene-a.02~vo-01": {
+      "plays": "m4a",
+      "caption": "You come late. [pause 0.4] The others did not."
+    },
+    "painting.stair": {
+      "sizes": [[1920, 1080]]
+    },
+    "portrait.narrator~angry": {
+      "size": [720, 900]
+    },
+    "glow.stair": {
+      "overlays": "painting.stair"
+    }
+  },
+  "decisions": [
+    {
+      "case": "approve-draft-voice-line",
+      "action": "approve",
+      "id": "scene-a.02~vo-01",
+      "from": "draft",
+      "to": "final"
+    },
+    {
+      "case": "approve-draft-picture",
+      "action": "approve",
+      "id": "painting.stair",
+      "from": "draft",
+      "to": "final"
+    },
+    {
+      "case": "approve-draft-mood-still",
+      "action": "approve",
+      "id": "portrait.narrator~angry",
+      "from": "draft",
+      "to": "final"
+    },
+    {
+      "case": "approve-draft-glow-mask",
+      "action": "approve",
+      "id": "glow.stair",
+      "from": "draft",
+      "to": "final"
+    },
+    {
+      "case": "reject-draft-picture-with-note",
+      "action": "reject",
+      "id": "painting.stair",
+      "from": "draft",
+      "to": "rejected",
+      "note": "too dark, lighter dawn"
+    }
+  ],
+  "redo": {
+    "id": "painting.stair",
+    "note": "lighter dawn",
+    "entry": "redo painting.stair: lighter dawn",
+    "afterNextRender": {
+      "noteCleared": true,
+      "newDraftStored": true
+    }
+  }
+}
