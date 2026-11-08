@@ -27,7 +27,11 @@ const builtIds = [
     .filter((p) => p.glow)
     .map((p) => `glow.${p.id.split(".")[1]}`),
 ];
-const allIds = new Set([...jobIds, ...builtIds]);
+// A picture with 2+ profiles is indexed once per profile: <id>~<profile> (Bob, 2026-11-08).
+const profileIds = job.pictures
+  .filter((p) => p.profiles.length >= 2)
+  .flatMap((p) => p.profiles.map((pr) => `${p.id}~${pr}`));
+const allIds = new Set([...jobIds, ...builtIds, ...profileIds]);
 
 test("job fixture follows the documented job contract", () => {
   assert.equal(job.schema, 1);

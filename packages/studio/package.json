@@ -1,0 +1,51 @@
+{
+  "name": "@asset-studio/studio",
+  "version": "0.2.0",
+  "description": "Local web studio for reviewing asset-studio work: look, listen, approve, reject.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "default": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "test": "vitest run && node --test tests/fixtures/fixtures.test.mjs"
+  },
+  "dependencies": {
+    "@asset-studio/cli": "workspace:*",
+    "@asset-studio/formats": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "playwright": "1.65.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
