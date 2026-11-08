@@ -30,4 +30,9 @@ export const realLibrary: Library = {
   setWorkFolder: cli.setWorkFolder,
 };
 
-export { CliError } from "@asset-studio/cli";
+export {
+  type AssetKey,
+  assetKeys,
+  CliError,
+  profileKey,
+} from "@asset-studio/cli";

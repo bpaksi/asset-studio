@@ -14,7 +14,14 @@ export {
   settingsPath,
   setWorkFolder,
 } from "./config/settings.js";
-export { approve, loadJob, reject } from "./needs/needs.js";
+export {
+  type AssetKey,
+  approve,
+  assetKeys,
+  loadJob,
+  profileKey,
+  reject,
+} from "./needs/needs.js";
 export {
   readIndex,
   readNotes,

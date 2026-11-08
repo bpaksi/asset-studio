@@ -262,6 +262,31 @@ describe("S7-03 review model", () => {
     expect(byKey["portrait.bystander"].file).toBeNull();
   });
 
+  it("a glow mask follows the library's keys: one per profile when its painting has 2+", async () => {
+    const job = JSON.parse(readFileSync(ws.jobPath, "utf8"));
+    job.pictures[0].profiles = ["dashboard", "ipad"];
+    writeFileSync(ws.jobPath, JSON.stringify(job));
+    await boot();
+    const { json } = await get(
+      `/api/review?job=${encodeURIComponent(ws.jobPath)}`,
+    );
+    const byKey = Object.fromEntries(json.rows.map((r: Json) => [r.key, r]));
+    expect(Object.keys(byKey)).toEqual(
+      expect.arrayContaining([
+        "painting.stair~dashboard",
+        "painting.stair~ipad",
+        "glow.stair~dashboard",
+        "glow.stair~ipad",
+      ]),
+    );
+    expect(byKey["glow.stair"]).toBeUndefined();
+    expect(byKey["glow.stair~ipad"].overlay.key).toBe("painting.stair~ipad");
+    expect(byKey["glow.stair~ipad"].declared).toEqual({
+      width: 1640,
+      height: 2360,
+    });
+  });
+
   it("serves store bytes exactly, with ranges", async () => {
     await boot();
     const row = await reviewRow("scene-a.02~vo-01");
@@ -334,6 +359,17 @@ describe("S7-05 approve and reject through the library", () => {
       "work/fixture-story/index.json",
       "work/fixture-story/notes.json",
     ]);
+  });
+
+  it("a per-profile key (foe.shade~ipad) can be rejected through the library", async () => {
+    await boot();
+    const { res } = await decision("reject", "foe.shade~ipad", {
+      note: "wrong blue",
+    });
+    expect(res.status).toBe(200);
+    expect(readIndex(paths())["foe.shade~ipad"]?.status).toBe("rejected");
+    expect(readNotes(paths())["foe.shade~ipad"]).toEqual(["wrong blue"]);
+    expect(readIndex(paths())["foe.shade~dashboard"]?.status).toBe("final");
   });
 
   it("a reject with no note fails AS-USAGE-1 and changes nothing", async () => {

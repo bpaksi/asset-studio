@@ -3,14 +3,20 @@ import { join } from "node:path";
 
 import type { AssetStatus, IndexEntry, Job } from "@asset-studio/formats";
 
-import { type AssetKey, assetKeys, glowOf } from "./keys.js";
-import type { Library } from "./library.js";
+import {
+  type AssetKey,
+  assetKeys,
+  type Library,
+  profileKey,
+} from "./library.js";
 
 export type Size = { width: number; height: number } | { seconds: number };
 
 export type ReviewRow = {
   key: string;
   id: string;
+  /** The job's asset ID without any `~profile`. */
+  assetId: string;
   kind: string;
   profile: string | null;
   status: AssetStatus;
@@ -47,6 +53,12 @@ export const mediaType = (file: string): "image" | "audio" | null => {
   return IMAGE.has(ext) ? "image" : AUDIO.has(ext) ? "audio" : null;
 };
 
+/** `painting.stair` -> `glow.stair`. */
+const glowOf = (pictureId: string): string | undefined => {
+  const dot = pictureId.indexOf(".");
+  return dot === -1 ? undefined : `glow.${pictureId.slice(dot + 1)}`;
+};
+
 const MEDIA_FILE = /^[0-9a-f]{64}\.[a-z0-9]+$/;
 
 export const mediaUrl = (story: string, file: string): string =>
@@ -60,7 +72,7 @@ export function buildReview(
 ): Review {
   const paths = lib.workPaths(workFolder, job.story);
   const index = lib.readIndex(paths);
-  const keys = assetKeys(job, new Set(Object.keys(index)));
+  const keys = assetKeys(job);
   const lines = new Map(job.lines.map((l) => [l.id, l]));
   const rowsByKey = new Map<string, ReviewRow>();
   const rows = keys.map((k) => {
@@ -70,12 +82,12 @@ export function buildReview(
   });
   for (const row of rows) {
     if (row.kind !== "glow") continue;
-    const painting = job.pictures.find((p) => glowOf(p.id) === row.id);
+    const painting = job.pictures.find((p) => glowOf(p.id) === row.assetId);
     if (painting === undefined) continue;
     const owner =
-      row.profile !== null && painting.profiles.length >= 2
-        ? `${painting.id}~${row.profile}`
-        : painting.id;
+      row.profile === null
+        ? painting.id
+        : profileKey(painting.id, [...new Set(painting.profiles)], row.profile);
     const target = rowsByKey.get(owner);
     row.overlay = { key: owner, mediaUrl: target?.mediaUrl ?? null };
   }
@@ -96,8 +108,7 @@ function buildRow(
 ): ReviewRow {
   const file = entry?.file ?? null;
   const line = k.kind === "line" ? lines.get(k.id) : undefined;
-  const profileName =
-    k.kind === "portrait" ? "portrait" : (k.profile ?? undefined);
+  const profileName = k.kind === "portrait" ? "portrait" : k.profile;
   const dims =
     profileName === undefined ? undefined : job.profiles[profileName];
   let media: ReviewRow["media"] = null;
@@ -125,8 +136,9 @@ function buildRow(
   return {
     key: k.key,
     id: k.id,
+    assetId: k.assetId,
     kind: k.kind,
-    profile: k.profile,
+    profile: k.profile ?? null,
     status: entry?.status ?? "missing",
     file,
     size: entry?.size ?? null,
