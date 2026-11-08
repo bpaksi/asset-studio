@@ -1,12 +1,7 @@
 {
   "job": "asset-job.json",
   "contract": "plans/P2-asset-studio.md (S3, S7, S8 and Shape sections); docs/job-contract.md and docs/export-contract.md do not exist yet",
-  "statuses": [
-    "missing",
-    "draft",
-    "final",
-    "rejected"
-  ],
+  "statuses": ["missing", "draft", "final", "rejected"],
   "startState": {
     "scene-a.02~vo-01": "draft",
     "painting.stair": "draft",
@@ -30,18 +25,10 @@
       "caption": "You come late. [pause 0.4] The others did not."
     },
     "painting.stair": {
-      "sizes": [
-        [
-          1920,
-          1080
-        ]
-      ]
+      "sizes": [[1920, 1080]]
     },
     "portrait.narrator~angry": {
-      "size": [
-        720,
-        900
-      ]
+      "size": [720, 900]
     },
     "glow.stair": {
       "overlays": "painting.stair"

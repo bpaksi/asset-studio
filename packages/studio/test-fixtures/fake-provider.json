@@ -1,11 +1,16 @@
 {
   "note": "Deterministic descriptors of what a fake provider returns per asset id. No bytes; a descriptor only.",
-  "voice": {"scene-a.02~vo-01": {"format": "wav", "text": "You come late. [pause 0.4] The others did not."}},
+  "voice": {
+    "scene-a.02~vo-01": {
+      "format": "wav",
+      "text": "You come late. [pause 0.4] The others did not."
+    }
+  },
   "image": {
-    "painting.stair": {"width": 1920, "height": 1080},
-    "glow.stair": {"width": 1920, "height": 1080, "greyscale": true},
-    "portrait.narrator": {"width": 720, "height": 900},
-    "portrait.bystander": {"width": 720, "height": 900},
-    "portrait.bystander~scared": {"width": 720, "height": 900}
+    "painting.stair": { "width": 1920, "height": 1080 },
+    "glow.stair": { "width": 1920, "height": 1080, "greyscale": true },
+    "portrait.narrator": { "width": 720, "height": 900 },
+    "portrait.bystander": { "width": 720, "height": 900 },
+    "portrait.bystander~scared": { "width": 720, "height": 900 }
   }
 }
