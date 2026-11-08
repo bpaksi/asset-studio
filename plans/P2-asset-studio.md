@@ -211,7 +211,6 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - Every error the person causes shows on the page with its code.
   - Viewports: 1440×900 desktop.
 
-<<<<<<< HEAD
 ### S8: Export
 - Depends on: S3
 - Touches: packages/cli/src/export/**, docs/export-contract.md
@@ -219,18 +218,6 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio export <job> --out <folder> [--drafts]` copies every `final` asset (and every `draft` with `--drafts`) into the folder as `<hash>.<ext>`, and writes `export-index.json`: for each ID its kind, file, pixel size or length, status, and for a line its speaker and text. It also copies the job's `source` hash.
   - It never exports `rejected` or `missing` assets, masters or WAVs. A test covers each.
   - `docs/export-contract.md` documents the folder, so the consumer's packaging (Bloodtower A1 step 5) is built against it.
-=======
-### S9: Studio, Painting editor and player
-- Depends on: S6, S8
-- Touches: packages/player/src/painting/**, packages/studio/src/painting/**, packages/formats/src/camera*, packages/player/example/**
-- Acceptance:
-  - `<Painting>` in `@asset-studio/player` plays a picture with a named move from the list above, with an optional glow mask flickering at 1–2 Hz with jitter (never a strobe; steady under reduced motion). A drawn camera track (the camera-track contract v1) is the escape. Unit tests cover each move's start and end frame.
-  - The drawn track follows [camera-track contract v1](../docs/camera-track-contract.md), locked 2026-11-07: a camera clock that, given the moment-clock time, returns the frame (holds, the four `ease` values, the `letterbox-hold-push` prelude, reduced-motion cuts), with unit tests; CSS transforms only; `<Painting>` is a sibling of `<TalkingAvatar>`, never a wrapper. `@asset-studio/formats` exports the camera-object schema and its nine shape rules, with tests. The file and moment-id checks are the consumer's pack loader, not this repo.
-  - Each scene's stills preload before it plays. The player example page (`packages/player/example/`) shows a drawn track, checked on a real iPad; memory and load time are recorded here (settled decision 6).
-  - In the studio, the person picks a move, drags the focus box, picks a speed and previews it. Saving writes the job's `camera` field through the CLI.
-  - Glow masks are painted in the browser with a soft brush, and saved as a greyscale mask at the picture's size.
-  - Viewports: 1440×900 desktop.
->>>>>>> origin/main
 
 ### S9: Release 0.2.x
 - Depends on: S4, S5, S6, S7, S8
@@ -270,9 +257,11 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S13: `<Painting>` player and the studio's Painting editor
 - Depends on: S9, and talking-avatar PR #13 (camera-track contract v1 locked) merged
-- Touches: packages/player/src/painting/**, packages/studio/src/{painting,portrait}/**, packages/formats/** (camera edits), packages/cli/src/export/**
+- Touches: packages/player/src/painting/**, packages/studio/src/{painting,portrait}/**, packages/formats/** (camera edits), packages/cli/src/export/**, packages/player/example/**
 - Acceptance:
   - `<Painting>` in `@asset-studio/player` plays a picture with a named move from the list above, with an optional glow mask flickering at 1–2 Hz with jitter (never a strobe; steady under reduced motion). A drawn camera track (camera-track contract v1, with PR #13's rulings) is the escape. Unit tests cover each move's start and end frame.
+  - The drawn track follows [camera-track contract v1](../docs/camera-track-contract.md), locked 2026-11-07: a camera clock that, given the moment-clock time, returns the frame (holds, the four `ease` values, the `letterbox-hold-push` prelude, reduced-motion cuts), with unit tests; CSS transforms only; `<Painting>` is a sibling of `<TalkingAvatar>`, never a wrapper. `@asset-studio/formats` exports the camera-object schema and its nine shape rules, with tests. The file and moment-id checks are the consumer's pack loader, not this repo.
+  - Each scene's stills preload before it plays. The player example page (`packages/player/example/`) shows a drawn track, checked on a real iPad; memory and load time are recorded here (settled decision 6).
   - In the studio, the person picks a moment, a move, drags the focus box, picks a speed and previews it. Saving writes `camera.json` in the work folder through the CLI library, never the job (DEC-840). Export copies `camera.json`.
   - Glow masks are painted in the browser with a soft brush, and saved as a greyscale mask at the painting's size.
   - The person drags the chin line on a portrait or mood still, and it saves to the index.
