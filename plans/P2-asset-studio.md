@@ -176,9 +176,22 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio approve <job> <id>` and `reject <job> <id> --note "<text>"` set the status in the index, and the note also goes to `notes.json`. These are the only ways to set `final` or `rejected`.
   - The store writes content-addressed files and never overwrites. Two runs with the same inputs give one file. Tests use temp folders.
 
+### S3-seam: Command registry and placeholder commands
+- Depends on: S3
+- Touches: packages/cli/src/{bin,render,studio-command}/**, packages/cli/src/export/command.ts, packages/cli/src/index.ts (only to export registry types)
+- Added 2026-11-08 so S4, S5, S7 and S8 can run in parallel without all editing `packages/cli/src/bin/`.
+- Acceptance:
+  - The dispatcher is async (`main` returns `Promise<number>`). Existing commands, usage text, exit codes and tests are unchanged.
+  - A command module exports `{ name, usage, summary, options, run(ctx, args) }` and registers itself; `bin/commands.ts` is the single list of imports a later step extends with one line.
+  - Placeholders: `render <job> [--only voice|picture] [--ai]` (`AS-RENDER-0`), `export <job> --out <folder> [--drafts]` (`AS-EXPORT-0`), `studio` (`AS-STUDIO-0`). Each needs the work folder (`AS-CONFIG-1`), validates its own flags (usage error, exit 2), then fails "not built yet" with exit 1.
+  - `registerRenderer({ kind, ai?, render(ctx, job, paths) })` lets S4, S5 and S6 add renderers from their own folders. `render` runs every registered renderer for the requested kinds, keeps going after a failure, and ends non-zero with the failed count. If no registered renderer matches the requested kinds (plain `render` with only an AI renderer, or `--only <kind>` with none for it), it fails `AS-RENDER-3` naming every missing kind; it never reports success when nothing ran. A renderer that throws a `CliError` has its own code and lines printed and counts as failed; other throws are wrapped as `AS-RENDER-1`.
+  - `--ai` runs the source renderers first, then the AI renderers fill what is still missing (S6).
+  - A command may set `needsWorkFolder: false` (default true); `studio` does, so a first start with no folder reaches the command.
+  - Tests cover each command's flags, the `AS-CONFIG-1` path, the coded failures, and the renderer registry with a fake renderer.
+
 ### S4: Voice (P1 S3)
 - Depends on: S3
-- Touches: packages/cli/src/{tts,voice}/**
+- Touches: packages/cli/src/{tts,voice}/**, packages/cli/src/bin/commands.ts (one import line only)
 - Acceptance:
   - P1 S3's acceptance holds, and the Gemini provider absorbs Bloodtower's tts-explorer code (`apps/Visuals/src/tts-explorer/lib/gemini.ts`: the Interactions API for the 3.8 models, `generateContent` for older ones, the PCM-to-WAV wrap).
   - `asset-studio render <job> --only voice` makes a WAV master in `masters/` and an m4a draft in the store, with macOS `afconvert`, for each line. Its index entry is `draft`.
@@ -187,7 +200,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S5: Pictures, stills and glow masks
 - Depends on: S3
-- Touches: packages/cli/src/{picture,glow}/**, packages/cli/package.json, pnpm-lock.yaml
+- Touches: packages/cli/src/{picture,glow}/**, packages/cli/package.json, pnpm-lock.yaml, packages/cli/src/bin/commands.ts (one import line only)
 - Acceptance:
   - `render --only picture` makes one WebP per picture and profile from its `source`, cropped by cover to the profile's size, and one WebP per cast mood at the `portrait` profile from its portrait `source`. The master is kept in `masters/`.
   - A glow mask placed by hand (`masters/glow.<entry>.png`) is checked as greyscale at the painting's exact size, then stored as WebP. A wrong size fails with `AS-GLOW-1` and both sizes.
@@ -195,7 +208,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S6: AI mode for pictures, stills and glow masks
 - Depends on: S5
-- Touches: packages/cli/src/ai/**
+- Touches: packages/cli/src/ai/**, packages/cli/src/bin/commands.ts (one import line only)
 - Acceptance:
   - An `ImageProvider` interface, with Gemini as its first provider. Tests use a fake provider.
   - `render --ai` makes every `missing` picture, mood still and glow mask as a draft: stills from the cast references and the job style, pictures from the prompt and the style, glow masks for pictures with `glow: true`.
@@ -204,7 +217,8 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 
 ### S7: Studio, review
 - Depends on: S3
-- Touches: packages/studio/**
+- Touches: packages/studio/**, pnpm-lock.yaml, packages/cli/src/index.ts (export lines only), packages/cli/src/studio-command/**, .github/workflows/** (browser-install line only)
+- Bob ruled 2026-11-08: the studio command calls `@asset-studio/studio` through a dynamic import, with no declared cli to studio dependency.
 - Acceptance:
   - A local web app (`asset-studio studio`, 127.0.0.1 only). On first start with no work folder, it shows only a form for the path and saves it as `config set` does. The path can be changed later from a settings page.
   - It opens a job and shows the needs list with statuses and a filter by kind and status.
@@ -294,7 +308,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
 - B0: G0b, then B1 (Bob)
 - B1: S1
 - B2: S2
-- B3: S3
+- B3: S3, then S3-seam (added 2026-11-08 to let B4 run in parallel)
 - B4: S4, S5, S7, S8 (S5 is the only dependency change; merge order: S5, S4, S7, S8)
 - B5: S6
 - B6: S9 (0.2 release; Bloodtower A1 can build against it)

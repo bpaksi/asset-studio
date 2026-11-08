@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
 
-import { CliError, EXIT_FAILURE, EXIT_USAGE } from "../config/errors.js";
+import { CliError, EXIT_FAILURE } from "../config/errors.js";
 import {
-  type Env,
   resolveWorkFolder,
   savedWorkFolder,
   setWorkFolder,
@@ -15,25 +14,15 @@ import {
   reject,
 } from "../needs/needs.js";
 import { workPaths } from "../store/store.js";
+import "./commands.js";
+import {
+  type CliContext,
+  getCommand,
+  usageError,
+  usageText,
+} from "./registry.js";
 
-export type CliContext = {
-  env: Env;
-  cwd: string;
-  stdout: (text: string) => void;
-  stderr: (text: string) => void;
-};
-
-export const USAGE = `Usage: asset-studio [--work-folder <path>] <command>
-
-Commands:
-  config get workFolder            Show the saved work folder
-  config set workFolder <path>     Save the work folder for this user
-  needs <job> [--json]             List every asset ID the job needs, with status
-  approve <job> <id>               Mark an asset final
-  reject <job> <id> --note <text>  Mark an asset rejected and keep the note
-
-Exit codes: 0 ok, 1 failure, 2 usage, 3 work folder not set (AS-CONFIG-1).
-`;
+export type { CliContext } from "./registry.js";
 
 const COMMANDS = new Set(["config", "needs", "approve", "reject"]);
 
@@ -43,18 +32,30 @@ type Parsed = {
   help: boolean;
   workFolder: string | undefined;
   note: string | undefined;
+  options: Record<string, string | true>;
 };
 
-const usageError = (message: string) =>
-  new CliError("AS-USAGE-1", message, EXIT_USAGE, [USAGE.trimEnd()]);
+/** The first positional, found without parsing flags (a registered command's flags decide the rest). */
+function findCommand(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] as string;
+    if (arg === "--work-folder" || arg === "--note") i++;
+    else if (!arg.startsWith("-")) return arg;
+  }
+  return undefined;
+}
 
-function parseArgs(argv: readonly string[]): Parsed {
+function parseArgs(
+  argv: readonly string[],
+  own: Readonly<Record<string, { value: boolean }>>,
+): Parsed {
   const parsed: Parsed = {
     positionals: [],
     json: false,
     help: false,
     workFolder: undefined,
     note: undefined,
+    options: {},
   };
   const value = (flag: string, index: number, inline: string | undefined) => {
     if (inline !== undefined) return { text: inline, next: index };
@@ -74,6 +75,13 @@ function parseArgs(argv: readonly string[]): Parsed {
       i = next;
       if (name === "--note") parsed.note = text;
       else parsed.workFolder = text;
+    } else if (Object.hasOwn(own, name) && own[name]?.value) {
+      const { text, next } = value(name, i, inline);
+      i = next;
+      parsed.options[name] = text;
+    } else if (Object.hasOwn(own, name)) {
+      if (inline !== undefined) throw usageError(`${name} takes no value.`);
+      parsed.options[name] = true;
     } else if (arg.startsWith("--") && arg.length > 2) {
       throw usageError(`Unknown option ${name}.`);
     } else parsed.positionals.push(arg);
@@ -115,22 +123,57 @@ function runConfig(args: string[], parsed: Parsed, ctx: CliContext): void {
   ctx.stdout(`${setWorkFolder(ctx.env, value, ctx.cwd)}\n`);
 }
 
-function run(argv: readonly string[], ctx: CliContext): void {
-  const parsed = parseArgs(argv);
+async function run(argv: readonly string[], ctx: CliContext): Promise<void> {
+  const name = findCommand(argv);
+  const registered = name === undefined ? undefined : getCommand(name);
+  const parsed = parseArgs(argv, registered?.options ?? {});
   const [command, ...args] = parsed.positionals;
   if (parsed.help || command === undefined) {
     if (!parsed.help) throw usageError("Missing command.");
-    ctx.stdout(USAGE);
+    ctx.stdout(usageText());
     return;
   }
-  if (!COMMANDS.has(command)) throw usageError(`Unknown command "${command}".`);
+  if (!COMMANDS.has(command) && registered === undefined) {
+    throw usageError(`Unknown command "${command}".`);
+  }
   if (command === "config") {
     runConfig(args, parsed, ctx);
     return;
   }
 
+  if (registered !== undefined && registered.needsWorkFolder === false) {
+    if (parsed.json || parsed.note !== undefined) {
+      throw usageError(`${registered.name} takes no --json or --note.`);
+    }
+    let workFolder: string | undefined;
+    try {
+      workFolder = resolveWorkFolder(ctx.env, ctx.cwd, parsed.workFolder);
+    } catch (error) {
+      // Only "not set" is expected here; the command shows its own form.
+      if (!(error instanceof CliError && error.code === "AS-CONFIG-1")) {
+        throw error;
+      }
+    }
+    await registered.run(
+      { ...ctx, workFolder },
+      { positionals: args, options: parsed.options },
+    );
+    return;
+  }
+
   // Every other command needs the work folder before anything else.
   const workFolder = resolveWorkFolder(ctx.env, ctx.cwd, parsed.workFolder);
+
+  if (registered !== undefined) {
+    if (parsed.json || parsed.note !== undefined) {
+      throw usageError(`${registered.name} takes no --json or --note.`);
+    }
+    await registered.run(
+      { ...ctx, workFolder },
+      { positionals: args, options: parsed.options },
+    );
+    return;
+  }
 
   if (command === "needs") {
     const [jobPath, ...extra] = args;
@@ -177,9 +220,12 @@ function run(argv: readonly string[], ctx: CliContext): void {
 }
 
 /** Run the CLI and return its exit code. Never throws. */
-export function main(argv: readonly string[], ctx: CliContext): number {
+export async function main(
+  argv: readonly string[],
+  ctx: CliContext,
+): Promise<number> {
   try {
-    run(argv, ctx);
+    await run(argv, ctx);
     return 0;
   } catch (error) {
     if (error instanceof CliError) {
