@@ -1,8 +1,9 @@
 name: release
 
-# Manual only. Publishes @asset-studio/formats then @asset-studio/player
-# via npm trusted publishing (GitHub OIDC, workflow release.yml, no environment).
-# 0.1.0 was published by hand; this job does not use a registry secret.
+# Manual only. Publishes @asset-studio/formats, player, cli and studio, in that
+# order, via npm trusted publishing (GitHub OIDC, workflow release.yml, no
+# environment). This job does not use a registry secret. It refuses to start if
+# any of the four versions is already on npm, so it never half-publishes.
 on:
   workflow_dispatch:
 
@@ -30,10 +31,11 @@ jobs:
           cache: pnpm
       - name: Ensure npm >= 11.5.1 for trusted publishing
         run: npm install -g npm@11.5.1
-      - name: Require formats and player versions to match
+      - name: Require all four versions to match and be unpublished
         run: |
           expected=""
-          for pkg in packages/formats packages/player; do
+          for pkg in packages/formats packages/player packages/cli packages/studio; do
+            name="$(node -p "require('./${pkg}/package.json').name")"
             ver="$(node -p "require('./${pkg}/package.json').version")"
             if [[ ! "$ver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
               echo "::error::${pkg} version '${ver}' is not MAJOR.MINOR.PATCH with an optional prerelease."
@@ -45,10 +47,15 @@ jobs:
               echo "::error::${pkg} version ${ver} does not match ${expected}"
               exit 1
             fi
+            if npm view "${name}@${ver}" version >/dev/null 2>&1; then
+              echo "::error::${name}@${ver} is already on npm. Bump all four packages to a new version."
+              exit 1
+            fi
           done
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - name: Publish formats then player with provenance
+      - run: node scripts/smoke-pack.mjs
+      - name: Publish formats, player, cli, studio with provenance
         run: |
           set -euo pipefail
           dest="${RUNNER_TEMP}/npm-tarballs"
@@ -56,15 +63,12 @@ jobs:
           # pnpm pack rewrites workspace:* to the real version (pnpm workspace
           # protocol). npm publish of the tarball is the OIDC path (npm >= 11.5.1);
           # pnpm 10 still shells publish out to npm and is not relied on here.
-          for pkg in packages/formats packages/player; do
-            name="$(node -p "require('./${pkg}/package.json').name")"
-            ver="$(node -p "require('./${pkg}/package.json').version")"
-            if npm view "${name}@${ver}" version >/dev/null 2>&1; then
-              echo "skip ${name}@${ver} (already on npm)"
-              continue
-            fi
+          # Pack all four before publishing any, so a pack failure publishes nothing.
+          for pkg in packages/formats packages/player packages/cli packages/studio; do
             pkgdest="${dest}/$(basename "${pkg}")"
             mkdir -p "$pkgdest"
             pnpm --filter "./${pkg}" pack --pack-destination "$pkgdest"
-            npm publish "$pkgdest"/*.tgz --access public --provenance
+          done
+          for pkg in packages/formats packages/player packages/cli packages/studio; do
+            npm publish "${dest}/$(basename "${pkg}")"/*.tgz --access public --provenance
           done

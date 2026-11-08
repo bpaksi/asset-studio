@@ -1,6 +1,6 @@
 {
   "name": "@asset-studio/player",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "<TalkingAvatar> React player for asset-studio character folders.",
   "license": "MIT",
   "repository": {
