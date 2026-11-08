@@ -4,6 +4,9 @@
   "description": "Command-line build pipeline for asset-studio.",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "asset-studio": "./dist/bin/main.js"
+  },
   "engines": {
     "node": ">=22"
   },
