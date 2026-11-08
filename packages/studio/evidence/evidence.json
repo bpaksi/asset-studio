@@ -1,0 +1,41 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "listeningSockets": ["127.0.0.1:61412"],
+  "url": "http://127.0.0.1:61412/",
+  "decodedPictures": {
+    "painting.stair": "webp 1920x1080",
+    "foe.shade~dashboard": "webp 1920x1080",
+    "foe.shade~ipad": "webp 1640x2360",
+    "portrait.narrator~angry": "webp 720x900"
+  },
+  "decodedLine": "m4a (M4A )",
+  "decodedSound": "wav",
+  "maskPixels": {
+    "lit": [206, 213, 226],
+    "painting": [30, 60, 120],
+    "litRect": {
+      "x": 1200,
+      "y": 300,
+      "w": 300,
+      "h": 260
+    },
+    "maskGray": 200
+  },
+  "preservation": {
+    "job": "d874c99f25e72326db214a6891b9685a4f8b00841dede481185969989027b604",
+    "masters": {
+      "glow.stair.png": "e3c8786a4d398501e60551e5b4d65fcd330c1ae89a3df36a644f471e21529344"
+    },
+    "otherStory": {
+      "index.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "store/keep.txt": "c2703a7ddf6c74b39505339af20dd6dd4f0794720e038b78ba395600c72417d4"
+    },
+    "storeFilesBefore": 7,
+    "storeFilesAfter": 8,
+    "note": "store gained only the simulated re-render file; every earlier store file has the same hash"
+  },
+  "cliExitCodeOnSigterm": 0
+}
