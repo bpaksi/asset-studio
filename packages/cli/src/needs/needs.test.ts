@@ -218,5 +218,11 @@ describe("assetKeys (multi-profile expansion)", () => {
     expect(() => approve(job, paths, "painting.n1-house")).toThrow(
       /not an asset ID/,
     );
+    draftOf(paths, "glow.n1-house~dashboard");
+    reject(job, paths, "glow.n1-house~dashboard", "too bright");
+    expect(readIndex(paths)["glow.n1-house~dashboard"]?.status).toBe(
+      "rejected",
+    );
+    expect(readNotes(paths)["glow.n1-house~dashboard"]).toEqual(["too bright"]);
   });
 });
