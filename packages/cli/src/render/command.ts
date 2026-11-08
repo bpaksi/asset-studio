@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import { type Command, registerCommand, usageError } from "../bin/registry.js";
 import { CliError, EXIT_FAILURE } from "../config/errors.js";
@@ -61,13 +61,15 @@ export const renderCommand: Command = {
       );
     }
 
-    const job = loadJob(resolve(ctx.cwd, jobPath));
+    const absJobPath = resolve(ctx.cwd, jobPath);
+    const where = { jobPath: absJobPath, jobDir: dirname(absJobPath) };
+    const job = loadJob(absJobPath);
     const paths = workPaths(ctx.workFolder, job.story);
     let rendered = 0;
     let failed = 0;
     const runOne = async (renderer: Renderer) => {
       try {
-        const outcome = await renderer.render(ctx, job, paths);
+        const outcome = await renderer.render(ctx, job, paths, where);
         rendered += outcome?.rendered ?? 0;
         failed += outcome?.failed ?? 0;
       } catch (error) {

@@ -117,6 +117,7 @@ export ──► a folder the consumer copies from: export index, media by hash,
 - **Moments:** a camera belongs to a moment, not a picture (DEC-401), so one painting in two moments can move two ways. `camera` is a named move (`move`, `speed`, `focus`) or a drawn track (`track`, camera-track contract v1). A moment with no camera plays its picture as a still.
 - **Kinds** are labels (DEC-844). asset-studio stores and filters by them and checks nothing else about them.
 - There is no `status` field anywhere in the job (DEC-839).
+- Relative paths in the job resolve against the folder that holds `asset-job.json`.
 
 ## Named camera moves (DEC-578; settles Bloodtower Q-293)
 
