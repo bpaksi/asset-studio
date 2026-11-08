@@ -62,6 +62,9 @@ export type AssetKey = DerivedId & {
 };
 
 /**
+ * Stable contract: S7 (studio) and S8 (export) call this; do not change its
+ * name or signature.
+ *
  * The index key of one profile of a picture (or glow mask): bare `id` when
  * the asset has one profile, `<id>~<profile>` when it has two or more.
  */
@@ -74,6 +77,10 @@ export function profileKey(
 }
 
 /**
+ * Stable contract: S7 (studio) and S8 (export) call this; do not change its
+ * name or signature. Throws AS-ID-3 for a picture whose id already has a
+ * `~variant` and 2+ profiles (no legal `<id>~<profile>` key exists).
+ *
  * Every index key the job implies: `derivedIds` with each picture, and the
  * glow mask of a picture, expanded to one key per profile when it has 2 or
  * more (Bob's ruling, 2026-11-08). Mood stills keep `portrait.<speaker>~<mood>`.
@@ -82,6 +89,12 @@ export function assetKeys(job: Job): AssetKey[] {
   const profilesOf = new Map<string, string[]>();
   for (const picture of job.pictures) {
     const profiles = [...new Set(picture.profiles)];
+    if (profiles.length >= 2 && picture.id.includes("~")) {
+      throw new CliError(
+        "AS-ID-3",
+        `"${picture.id}" already has a ~variant and ${profiles.length} profiles, so it has no valid per-profile key. Give it one profile or drop the variant.`,
+      );
+    }
     profilesOf.set(picture.id, profiles);
     const dot = picture.id.indexOf(".");
     if (picture.glow === true && dot !== -1) {

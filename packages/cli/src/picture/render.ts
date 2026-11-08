@@ -1,19 +1,26 @@
+import { randomUUID } from "node:crypto";
 import {
-  constants,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
 } from "node:fs";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, join } from "node:path";
 
 import type { Job } from "@asset-studio/formats";
 
 import type { CommandContext } from "../bin/registry.js";
 import { CliError } from "../config/errors.js";
 import { glowMasterPath, maskWebp, readMask } from "../glow/glow.js";
-import { profileKey } from "../needs/needs.js";
-import { type Renderer, registerRenderer } from "../render/registry.js";
+import { assetKeys, profileKey } from "../needs/needs.js";
+import {
+  type Renderer,
+  type RenderJob,
+  registerRenderer,
+  resolveJobPath,
+} from "../render/registry.js";
 import { recordDraft, sha256, type WorkPaths } from "../store/store.js";
 import { coverWebp, type Dimensions, imageSize } from "./images.js";
 
@@ -48,8 +55,12 @@ async function guard(
   }
 }
 
-function readSource(ctx: CommandContext, id: string, source: string): Buffer {
-  const path = resolve(ctx.cwd, source);
+/** Read a job-declared source. An empty path is AS-PICTURE-4, an unreadable file AS-PICTURE-1. */
+function readSource(where: RenderJob, id: string, source: string): Buffer {
+  if (source.trim() === "") {
+    throw new CliError("AS-PICTURE-4", `${id}: the source path is empty.`);
+  }
+  const path = resolveJobPath(where.jobDir, source);
   try {
     return readFileSync(path);
   } catch (error) {
@@ -61,20 +72,48 @@ function readSource(ctx: CommandContext, id: string, source: string): Buffer {
 }
 
 /**
- * Keep the original as the master. Copied once; an existing master is never
- * rewritten or replaced, whatever the source now holds.
+ * Keep the original as the master at `masters/<id>.<ext>`, byte for byte (never
+ * re-encoded). Written temp-then-rename so a partial copy cannot stick. If a
+ * master is already there with other bytes (the source changed, or the file
+ * is damaged), it is kept as `masters/<id>.<first 8 hex of its sha256>.<ext>`
+ * and the new one takes its place; one line is logged.
  */
-function keepMaster(paths: WorkPaths, id: string, sourcePath: string): void {
-  const ext = extname(sourcePath).slice(1).toLowerCase() || "bin";
+function keepMaster(
+  ctx: CommandContext,
+  paths: WorkPaths,
+  id: string,
+  source: string,
+  bytes: Buffer,
+): void {
+  const ext = extname(source).slice(1).toLowerCase() || "bin";
   const dir = mastersDir(paths);
-  mkdirSync(dir, { recursive: true });
   const target = join(dir, `${id}.${ext}`);
-  if (existsSync(target)) return;
   try {
-    // COPYFILE_EXCL: never replaces a file that appeared since the check.
-    copyFileSync(sourcePath, target, constants.COPYFILE_EXCL);
+    mkdirSync(dir, { recursive: true });
+    let old: Buffer | undefined;
+    try {
+      old = readFileSync(target);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (old?.equals(bytes) === true) return;
+    const tmp = join(dir, `.${randomUUID()}.tmp`);
+    writeFileSync(tmp, bytes, { flag: "wx" });
+    try {
+      if (old !== undefined) {
+        const archive = join(dir, `${id}.${sha256(old).slice(0, 8)}.${ext}`);
+        if (!existsSync(archive)) renameSync(target, archive);
+        ctx.stdout(
+          `${id}: source changed; kept the old master as ${basename(archive)}\n`,
+        );
+      }
+      renameSync(tmp, target);
+    } catch (error) {
+      rmSync(tmp, { force: true });
+      throw error;
+    }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return;
+    if (error instanceof CliError) throw error;
     throw new CliError(
       "AS-PICTURE-3",
       `${id}: cannot keep master ${basename(target)}: ${(error as Error).message}`,
@@ -119,6 +158,7 @@ async function renderPictures(
   ctx: CommandContext,
   job: Job,
   paths: WorkPaths,
+  where: RenderJob,
   outcome: Outcome,
 ): Promise<void> {
   for (const picture of job.pictures) {
@@ -127,19 +167,31 @@ async function renderPictures(
     let bytes: Buffer;
     let sourceSize: Dimensions;
     try {
-      bytes = readSource(ctx, picture.id, picture.source);
+      bytes = readSource(where, picture.id, picture.source);
       sourceSize = await imageSize(bytes).catch((error: unknown) => {
         throw new CliError(
           "AS-PICTURE-1",
           `${picture.id}: source ${picture.source} is not a readable image: ${(error as Error).message}`,
         );
       });
-      keepMaster(paths, picture.id, resolve(ctx.cwd, picture.source));
+      keepMaster(ctx, paths, picture.id, picture.source, bytes);
     } catch (error) {
       // The source cannot be used: one failure for the picture, logged with its ID.
       await guard(ctx, picture.id, outcome, async () => {
         throw error;
       });
+      if (picture.glow === true && picture.id.includes(".")) {
+        const glowId = `glow.${picture.id.slice(picture.id.indexOf(".") + 1)}`;
+        for (const profile of profiles) {
+          const key = profileKey(glowId, profiles, profile);
+          await guard(ctx, key, outcome, async () => {
+            throw new CliError(
+              "AS-GLOW-6",
+              `${key}: skipped because the source of ${picture.id} failed.`,
+            );
+          });
+        }
+      }
       continue;
     }
 
@@ -228,6 +280,7 @@ async function renderStills(
   ctx: CommandContext,
   job: Job,
   paths: WorkPaths,
+  where: RenderJob,
   outcome: Outcome,
 ): Promise<void> {
   for (const member of job.cast) {
@@ -248,14 +301,14 @@ async function renderStills(
             `${id}: the job has no "portrait" profile.`,
           );
         }
-        const bytes = readSource(ctx, id, source);
+        const bytes = readSource(where, id, source);
         const sourceSize = await imageSize(bytes).catch((error: unknown) => {
           throw new CliError(
             "AS-PICTURE-1",
             `${id}: source ${source} is not a readable image: ${(error as Error).message}`,
           );
         });
-        keepMaster(paths, id, resolve(ctx.cwd, source));
+        keepMaster(ctx, paths, id, source, bytes);
         await renderOne(
           paths,
           { key: id, kind: "portrait", target, profile: "portrait" },
@@ -270,10 +323,12 @@ async function renderStills(
 
 export const pictureRenderer: Renderer = {
   kind: "picture",
-  async render(ctx, job, paths) {
+  async render(ctx, job, paths, where) {
+    // Fails closed (AS-ID-3) before anything is written.
+    assetKeys(job);
     const outcome: Outcome = { rendered: 0, failed: 0 };
-    await renderPictures(ctx, job, paths, outcome);
-    await renderStills(ctx, job, paths, outcome);
+    await renderPictures(ctx, job, paths, where, outcome);
+    await renderStills(ctx, job, paths, where, outcome);
     return outcome;
   },
 };

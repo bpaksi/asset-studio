@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -107,26 +108,28 @@ const baseJob = (over: Partial<Job> = {}): Job => ({
   ...over,
 });
 
-const run = async (job: Job, extra: string[] = ["--only", "picture"]) => {
+const run = async (
+  job: Job,
+  extra: string[] = ["--only", "picture"],
+  cwd = dir,
+  jobArg = "asset-job.json",
+) => {
   writeFileSync(join(dir, "asset-job.json"), JSON.stringify(job));
   let out = "";
   let err = "";
-  const code = await main(
-    ["--work-folder", work, "render", "asset-job.json", ...extra],
-    {
-      env: {
-        PATH: process.env.PATH,
-        ASSET_STUDIO_CONFIG_DIR: join(dir, "cfg"),
-      },
-      cwd: dir,
-      stdout: (t) => {
-        out += t;
-      },
-      stderr: (t) => {
-        err += t;
-      },
+  const code = await main(["--work-folder", work, "render", jobArg, ...extra], {
+    env: {
+      PATH: process.env.PATH,
+      ASSET_STUDIO_CONFIG_DIR: join(dir, "cfg"),
     },
-  );
+    cwd,
+    stdout: (t) => {
+      out += t;
+    },
+    stderr: (t) => {
+      err += t;
+    },
+  });
   return { code, out, err };
 };
 
@@ -589,28 +592,151 @@ describe("S5-05 store integrity and replay", () => {
     // The other picture, both profiles, is untouched.
     expect(entry("foe.bat~wide")).toEqual(idx["foe.bat~wide"]);
     expect(entry("foe.bat~tall")).toEqual(idx["foe.bat~tall"]);
-    // The master was not resaved in place.
-    expect(snapshot(join(work, story, "masters"))).toEqual(masters);
+    // The old master is kept byte for byte under its hash; the other is untouched.
+    const after2 = snapshot(join(work, story, "masters"));
+    expect(
+      after2[`foe.shade.${masters["foe.shade.png"]?.slice(0, 8)}.png`],
+    ).toBe(masters["foe.shade.png"]);
+    expect(after2["foe.bat.png"]).toBe(masters["foe.bat.png"]);
   });
 
-  it.skipIf(process.getuid?.() === 0)(
-    "a write failure leaves the index byte-identical and nothing final",
-    async () => {
-      await setup();
-      await run(twoJob());
-      const index = readFileSync(join(work, story, "index.json"), "utf8");
-      const store = snapshot(storeDir());
-      put("shade.png", await png(64, 32, () => YELLOW));
-      chmodSync(storeDir(), 0o555);
-      const result = await run(twoJob());
-      chmodSync(storeDir(), 0o755);
-      expect(result.code).toBe(1);
-      expect(result.err).toMatch(/AS-PICTURE-9: foe\.shade/);
-      expect(readFileSync(join(work, story, "index.json"), "utf8")).toBe(index);
-      expect(snapshot(storeDir())).toEqual(store);
-      expect(Object.values(readIdx()).every((e) => e.status === "draft")).toBe(
-        true,
-      );
-    },
-  );
+  it("a write failure leaves the index byte-identical and nothing final", async () => {
+    await setup();
+    await run(twoJob());
+    const index = readFileSync(join(work, story, "index.json"), "utf8");
+    // A regular file where store/ should be: every store write fails.
+    renameSync(storeDir(), join(work, story, "store-saved"));
+    writeFileSync(storeDir(), "not a folder");
+    put("shade.png", await png(64, 32, () => YELLOW));
+    const result = await run(twoJob());
+    expect(result.code).toBe(1);
+    expect(result.err).toMatch(/AS-PICTURE-9: foe\.shade/);
+    expect(readFileSync(join(work, story, "index.json"), "utf8")).toBe(index);
+    expect(readFileSync(storeDir(), "utf8")).toBe("not a folder");
+    expect(Object.values(readIdx()).every((e) => e.status === "draft")).toBe(
+      true,
+    );
+  });
+
+  it("keeps the old master under its hash when the source changes", async () => {
+    await setup();
+    const first = await png(64, 32, bands);
+    await run(twoJob());
+    const master = join(work, story, "masters", "foe.shade.png");
+    const oldHash = createHash("sha256")
+      .update(first)
+      .digest("hex")
+      .slice(0, 8);
+    const second = await png(64, 32, () => YELLOW);
+    put("shade.png", second);
+    const result = await run(twoJob());
+    expect(result.code).toBe(0);
+    expect(readFileSync(master).equals(second)).toBe(true);
+    const archived = join(work, story, "masters", `foe.shade.${oldHash}.png`);
+    expect(readFileSync(archived).equals(first)).toBe(true);
+    expect(result.out.match(/kept the old master/g)).toHaveLength(1);
+    // A rerun with the same source changes nothing.
+    const again = await run(twoJob());
+    expect(again.out).not.toContain("kept the old master");
+    expect(readdirSync(join(work, story, "masters"))).toHaveLength(3);
+  });
+
+  it("replaces a damaged master under the same rule", async () => {
+    await setup();
+    await run(twoJob());
+    const master = join(work, story, "masters", "foe.shade.png");
+    const good = readFileSync(master);
+    writeFileSync(master, "partial");
+    expect((await run(twoJob())).code).toBe(0);
+    expect(readFileSync(master).equals(good)).toBe(true);
+    expect(
+      readdirSync(join(work, story, "masters")).some((f) =>
+        /^foe\.shade\.[0-9a-f]{8}\.png$/.test(f),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("job-relative paths, empty paths and variant ids", () => {
+  it("resolves sources against the job folder, not the cwd", async () => {
+    put("shade.png", await png(64, 32, bands));
+    const other = join(dir, "elsewhere");
+    mkdirSync(other);
+    const result = await run(
+      foeJob(["wide"]),
+      ["--only", "picture"],
+      other,
+      join(dir, "asset-job.json"),
+    );
+    expect(result.code).toBe(0);
+    expect(Object.keys(readIdx())).toEqual(["foe.shade"]);
+  });
+
+  it("rejects an empty source path with a code", async () => {
+    const job = foeJob(["wide"]);
+    job.pictures[0] = { ...job.pictures[0], source: " " } as never;
+    const result = await run(job);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("AS-PICTURE-4: foe.shade");
+  });
+
+  it("logs a coded line for the skipped glow when the source fails", async () => {
+    const result = await run(
+      baseJob({
+        pictures: [
+          {
+            id: "painting.n1-house",
+            kind: "painting",
+            profiles: ["wide"],
+            source: "art/missing.png",
+            glow: true,
+          },
+        ],
+      }),
+    );
+    expect(result.err).toContain("AS-PICTURE-1: painting.n1-house");
+    expect(result.err).toContain("AS-GLOW-6: glow.n1-house");
+    expect(result.out).toContain("failed 2");
+  });
+
+  it("fails closed for a variant id with 2+ profiles, in render and needs", async () => {
+    put("shade.png", await png(64, 32, bands));
+    const job = baseJob({
+      pictures: [
+        {
+          id: "foe.shade~night",
+          kind: "foe",
+          profiles: ["wide", "tall"],
+          source: "art/shade.png",
+        },
+      ],
+    });
+    const result = await run(job);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("AS-ID-3");
+    expect(result.err).toContain("foe.shade~night");
+    expect(result.err).not.toContain("ZodError");
+    expect(existsSync(join(work, story))).toBe(false);
+    let out = "";
+    let err = "";
+    const code = await main(
+      ["--work-folder", work, "needs", "asset-job.json"],
+      {
+        env: {
+          PATH: process.env.PATH,
+          ASSET_STUDIO_CONFIG_DIR: join(dir, "cfg"),
+        },
+        cwd: dir,
+        stdout: (t) => {
+          out += t;
+        },
+        stderr: (t) => {
+          err += t;
+        },
+      },
+    );
+    expect(code).toBe(1);
+    expect(err).toContain("AS-ID-3");
+    expect(out).toBe("");
+  });
 });
