@@ -18,6 +18,7 @@ import {
 } from "../store/store.js";
 import {
   approve,
+  assetKeys,
   computeNeeds,
   formatNeeds,
   loadJob,
@@ -167,5 +168,61 @@ describe("approve and reject", () => {
       /valid work folder file/,
     );
     expect(readFileSync(paths.index, "utf8")).toBe("{");
+  });
+});
+
+describe("assetKeys (multi-profile expansion)", () => {
+  const multi = (): Job => ({
+    ...makeJob(),
+    profiles: {
+      dashboard: { width: 8, height: 4 },
+      ipad: { width: 4, height: 8 },
+    },
+    pictures: [
+      {
+        id: "painting.n1-house",
+        kind: "painting",
+        profiles: ["dashboard", "ipad"],
+        source: "a.png",
+        glow: true,
+      },
+      {
+        id: "foe.shade",
+        kind: "foe",
+        profiles: ["ipad"],
+        source: "b.png",
+      },
+    ],
+  });
+
+  it("keys 2+ profiles as <id>~<profile> and keeps one profile bare", () => {
+    const keys = assetKeys(multi()).map((k) => k.key);
+    expect(keys).toContain("painting.n1-house~dashboard");
+    expect(keys).toContain("painting.n1-house~ipad");
+    expect(keys).toContain("glow.n1-house~dashboard");
+    expect(keys).toContain("glow.n1-house~ipad");
+    expect(keys).toContain("foe.shade");
+    expect(keys).not.toContain("painting.n1-house");
+    expect(keys).toContain("portrait.count~angry");
+  });
+
+  it("lists, approves and rejects expanded keys", () => {
+    const paths = workPaths(dir, "dracula");
+    const job = multi();
+    expect(
+      computeNeeds(job, paths).find((n) => n.id === "foe.shade")?.status,
+    ).toBe("missing");
+    draftOf(paths, "painting.n1-house~ipad");
+    approve(job, paths, "painting.n1-house~ipad");
+    expect(readIndex(paths)["painting.n1-house~ipad"]?.status).toBe("final");
+    expect(() => approve(job, paths, "painting.n1-house")).toThrow(
+      /not an asset ID/,
+    );
+    draftOf(paths, "glow.n1-house~dashboard");
+    reject(job, paths, "glow.n1-house~dashboard", "too bright");
+    expect(readIndex(paths)["glow.n1-house~dashboard"]?.status).toBe(
+      "rejected",
+    );
+    expect(readNotes(paths)["glow.n1-house~dashboard"]).toEqual(["too bright"]);
   });
 });
