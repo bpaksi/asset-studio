@@ -14,8 +14,9 @@ import {
   readIndex,
   readNotes,
   type WorkPaths,
+  withStoryLock,
   writeIndex,
-  writeNotes,
+  writeIndexAndNotes,
 } from "../store/store.js";
 
 export function loadJob(path: string): Job {
@@ -86,8 +87,10 @@ function requireDecidable(job: Job, paths: WorkPaths, id: string) {
 
 /** Set `final`. Only this and `reject` can. */
 export function approve(job: Job, paths: WorkPaths, id: string): void {
-  const { index, entry } = requireDecidable(job, paths, id);
-  writeIndex(paths, { ...index, [id]: { ...entry, status: "final" } });
+  withStoryLock(paths, () => {
+    const { index, entry } = requireDecidable(job, paths, id);
+    writeIndex(paths, { ...index, [id]: { ...entry, status: "final" } });
+  });
 }
 
 /** Set `rejected`; the note goes to the entry and to `notes.json`. */
@@ -105,13 +108,18 @@ export function reject(
       EXIT_USAGE,
     );
   }
-  const { index, entry } = requireDecidable(job, paths, id);
-  const notes = readNotes(paths);
-  const rejected: IndexEntry = {
-    ...entry,
-    status: "rejected",
-    notes: [...entry.notes, text],
-  };
-  writeIndex(paths, { ...index, [id]: rejected });
-  writeNotes(paths, { ...notes, [id]: [...(notes[id] ?? []), text] });
+  withStoryLock(paths, () => {
+    const { index, entry } = requireDecidable(job, paths, id);
+    const notes = readNotes(paths);
+    const rejected: IndexEntry = {
+      ...entry,
+      status: "rejected",
+      notes: [...entry.notes, text],
+    };
+    writeIndexAndNotes(
+      paths,
+      { ...index, [id]: rejected },
+      { ...notes, [id]: [...(notes[id] ?? []), text] },
+    );
+  });
 }

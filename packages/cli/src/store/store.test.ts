@@ -17,6 +17,8 @@ import {
   readIndex,
   recordDraft,
   sha256,
+  storeTestHooks,
+  withStoryLock,
   workPaths,
 } from "./store.js";
 
@@ -187,5 +189,67 @@ describe("index files", () => {
 
   it("reads a missing index as empty", () => {
     expect(readIndex(workPaths(dir, "none"))).toEqual({});
+  });
+});
+
+describe("withStoryLock", () => {
+  afterEach(() => {
+    storeTestHooks.lockTimeoutMs = undefined;
+    storeTestHooks.beforeCommit = undefined;
+  });
+
+  it("releases the lock when the body throws", () => {
+    const paths = workPaths(dir, "s");
+    expect(() =>
+      withStoryLock(
+        paths,
+        () => {
+          throw new Error("boom");
+        },
+        { create: true },
+      ),
+    ).toThrow("boom");
+    expect(readdirSync(paths.root)).toEqual([]);
+  });
+
+  it("a held lock gives AS-STORE-4 after the timeout and is left alone", () => {
+    const paths = workPaths(dir, "s");
+    storeTestHooks.lockTimeoutMs = 50;
+    withStoryLock(
+      paths,
+      () => {
+        expect(() => withStoryLock(paths, () => 1)).toThrow(/in progress/);
+      },
+      { create: true },
+    );
+    expect(readdirSync(paths.root)).toEqual([]);
+  });
+
+  it("a failed commit leaves no temp file and keeps the old file", () => {
+    const paths = workPaths(dir, "s");
+    recordDraft(paths, {
+      id: "sound.x",
+      kind: "k",
+      data: bytes("1"),
+      ext: "wav",
+      size: { seconds: 1 },
+      inputs: { v: 1 },
+    });
+    const before = readFileSync(paths.index, "utf8");
+    storeTestHooks.beforeCommit = () => {
+      throw new Error("fault");
+    };
+    expect(() =>
+      recordDraft(paths, {
+        id: "sound.x",
+        kind: "k",
+        data: bytes("2"),
+        ext: "wav",
+        size: { seconds: 1 },
+        inputs: { v: 2 },
+      }),
+    ).toThrow(/AS-STORE-5|fault/);
+    expect(readFileSync(paths.index, "utf8")).toBe(before);
+    expect(readdirSync(paths.root).sort()).toEqual(["index.json", "store"]);
   });
 });
