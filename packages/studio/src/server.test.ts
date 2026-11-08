@@ -1,6 +1,6 @@
 import {
-  chmodSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   writeFileSync,
@@ -198,23 +198,17 @@ describe("S7-02 config through the library", () => {
     expect(logged.join("")).toContain("AS-STUDIO-2");
   });
 
-  it.skipIf(process.getuid?.() === 0)(
-    "an unwritable settings folder shows AS-STUDIO-10 and keeps the valid setting",
-    async () => {
-      await boot({ folder: null });
-      await post("/api/config", { workFolder: ws.work });
-      const before = readFileSync(join(ws.cfg, "settings.json"), "utf8");
-      chmodSync(ws.cfg, 0o555);
-      try {
-        const other = await post("/api/config", { workFolder: ws.root });
-        expect(other.json.error.code).toBe("AS-STUDIO-10");
-      } finally {
-        chmodSync(ws.cfg, 0o755);
-      }
-      expect(readFileSync(join(ws.cfg, "settings.json"), "utf8")).toBe(before);
-      expect(readdirSync(ws.cfg)).toEqual(["settings.json"]);
-    },
-  );
+  it("a settings file that cannot be written shows AS-STUDIO-10 and keeps the valid setting", async () => {
+    await boot({ folder: null });
+    await post("/api/config", { workFolder: ws.work });
+    const before = readFileSync(join(ws.cfg, "settings.json"), "utf8");
+    // The library writes settings.json.<pid>.tmp first; a folder in its place makes that fail.
+    mkdirSync(join(ws.cfg, `settings.json.${process.pid}.tmp`));
+    const other = await post("/api/config", { workFolder: ws.root });
+    expect(other.json.error.code).toBe("AS-STUDIO-10");
+    expect(readFileSync(join(ws.cfg, "settings.json"), "utf8")).toBe(before);
+    expect(savedWorkFolder(ws.env)).toBe(ws.work);
+  });
 
   it("a corrupt settings file is reported (AS-CONFIG-2), never overwritten", async () => {
     await boot({ folder: null });
@@ -436,25 +430,31 @@ describe("S7-06 failure and stale review", () => {
     expect(bad.json.error.code).toBe("AS-JOB-2");
   });
 
-  it.skipIf(process.getuid?.() === 0)(
-    "an induced save failure shows its code, saves nothing and never reports final",
-    async () => {
-      await boot();
-      const row = await reviewRow("painting.stair");
-      const before = hashTree(ws.root);
-      chmodSync(join(ws.work, "fixture-story"), 0o555);
-      let json: Json;
-      try {
-        json = (await decision("approve", "painting.stair")).json;
-      } finally {
-        chmodSync(join(ws.work, "fixture-story"), 0o755);
-      }
-      expect(json.error.code).toBe("AS-STORE-5");
-      expect(json.ok).toBeUndefined();
-      expect(hashTree(ws.root)).toEqual(before);
-      expect(readIndex(paths())["painting.stair"]?.file).toBe(row.file);
-    },
-  );
+  it("an induced save failure (the story lock cannot be taken) shows its code, saves nothing and never reports final", async () => {
+    await boot();
+    const row = await reviewRow("painting.stair");
+    // A regular file where the lock folder must be made: no permissions involved.
+    writeFileSync(join(ws.work, "fixture-story", ".lock"), "stuck");
+    const before = hashTree(ws.root);
+    const { json } = await decision("approve", "painting.stair");
+    expect(json.error.code).toBe("AS-STORE-4");
+    expect(json.ok).toBeUndefined();
+    expect(hashTree(ws.root)).toEqual(before);
+    expect(readIndex(paths())["painting.stair"]?.file).toBe(row.file);
+    expect(readIndex(paths())["painting.stair"]?.status).toBe("draft");
+  }, 30000);
+
+  it("a client error report is logged on one line with control characters removed", async () => {
+    await boot();
+    await post("/api/client-error", {
+      code: "AS-STUDIO-5\nAS-FAKE-1: forged",
+      message: "bad\r\nline\u0007 two",
+    });
+    const line = logged.join("");
+    expect(line.match(/\n/g)?.length).toBe(1);
+    expect(line).not.toContain("\u0007");
+    expect(line).toContain("AS-STUDIO-5");
+  });
 
   it("a stale review (the draft was re-rendered since it was opened) is not approved", async () => {
     await boot();

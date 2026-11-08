@@ -3,7 +3,6 @@
 // page as a person would. Media are the committed tiny WebP/m4a/wav fixtures.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +17,7 @@ import {
   readIndex,
   readNotes,
   savedWorkFolder,
+  setWorkFolder,
   workPaths,
 } from "@asset-studio/cli";
 import { readImageInfo } from "@asset-studio/formats";
@@ -788,29 +788,25 @@ describe("S7-04/06 failure cases at 1440x900", () => {
     }
   });
 
-  it.skipIf(process.getuid?.() === 0)(
-    "an induced save failure shows its code and the draft stays a draft",
-    async () => {
-      ws = buildWorkspace();
-      try {
-        await open();
-        await pick(page, "painting.stair");
-        const before = readFileSync(ws.indexPath, "utf8");
-        chmodSync(join(ws.work, "fixture-story"), 0o555);
-        try {
-          await page.locator("#approve").click();
-          await expect.poll(() => errorCode(page)).toBe("AS-STORE-5");
-        } finally {
-          chmodSync(join(ws.work, "fixture-story"), 0o755);
-        }
-        await shot(page, "13-save-failure.png");
-        expect(readFileSync(ws.indexPath, "utf8")).toBe(before);
-        expect(await rowStatus(page, "painting.stair")).toBe("draft");
-      } finally {
-        await closeAll();
-      }
-    },
-  );
+  it("an induced save failure shows its code and the draft stays a draft", async () => {
+    ws = buildWorkspace();
+    try {
+      await open();
+      await pick(page, "painting.stair");
+      const before = readFileSync(ws.indexPath, "utf8");
+      // A regular file where the story lock folder must be made.
+      writeFileSync(join(ws.work, "fixture-story", ".lock"), "stuck");
+      await page.locator("#approve").click();
+      await expect
+        .poll(() => errorCode(page), { timeout: 20000 })
+        .toBe("AS-STORE-4");
+      await shot(page, "13-save-failure.png");
+      expect(readFileSync(ws.indexPath, "utf8")).toBe(before);
+      expect(await rowStatus(page, "painting.stair")).toBe("draft");
+    } finally {
+      await closeAll();
+    }
+  }, 40000);
 
   it("an unknown job file shows the library's code", async () => {
     ws = buildWorkspace();
@@ -822,6 +818,104 @@ describe("S7-04/06 failure cases at 1440x900", () => {
       expect(MEDIA.length).toBeGreaterThan(0);
     } finally {
       await closeAll();
+    }
+  });
+});
+
+describe("S7-02 which work folder the CLI-started studio uses", () => {
+  let a: Workspace;
+  let b: Workspace;
+  let cli: Cli | undefined;
+  let page: Page | undefined;
+
+  const stop = async () => {
+    await page?.close();
+    if (cli?.proc.exitCode === null) {
+      const exited = new Promise((done) => cli?.proc.once("exit", done));
+      cli.proc.kill("SIGTERM");
+      await exited;
+    }
+    a.cleanup();
+    b.cleanup();
+  };
+  const status = (ws: Workspace, key: string) =>
+    readIndex(workPaths(ws.work, "fixture-story"))[key]?.status;
+
+  it("with a saved folder A and no flag, changing to B in Settings makes review and approve use B", async () => {
+    a = buildWorkspace();
+    b = buildWorkspace();
+    try {
+      setWorkFolder(a.env, a.work, a.root);
+      cli = await startCli(a, ["studio", "--port", "0"]);
+      page = await newPage();
+      await page.goto(`${cli.url}?job=${encodeURIComponent(a.jobPath)}`);
+      await page.locator("#needs").waitFor();
+      expect(await page.locator("#pinned-note").count()).toBe(0);
+      await page.locator("#nav-settings").click();
+      await page.locator("#settings-form-input").fill(b.work);
+      await page.locator("#settings-form-save").click();
+      await page.locator("#saved-note").waitFor();
+      expect(savedWorkFolder(a.env)).toBe(b.work);
+      await page.locator("#nav-review").click();
+      await page.locator("#needs").waitFor();
+      // Make B recognisable: its painting is already final there.
+      const idx = JSON.parse(readFileSync(b.indexPath, "utf8"));
+      idx["painting.stair"].status = "final";
+      writeFileSync(b.indexPath, JSON.stringify(idx, null, 2));
+      await page.locator("#job-open").click();
+      await expect
+        .poll(() => rowStatus(page as Page, "painting.stair"))
+        .toBe("final");
+      await pick(page, "scene-a.02~vo-01");
+      await page.locator("#approve").click();
+      await expect
+        .poll(() => rowStatus(page as Page, "scene-a.02~vo-01"))
+        .toBe("final");
+      expect(status(b, "scene-a.02~vo-01")).toBe("final");
+      expect(status(a, "scene-a.02~vo-01")).toBe("draft");
+      await pick(page, "portrait.narrator~angry");
+      await page.locator("#reject-note").fill("redo it");
+      await page.locator("#reject").click();
+      await expect
+        .poll(() => rowStatus(page as Page, "portrait.narrator~angry"))
+        .toBe("rejected");
+      expect(status(b, "portrait.narrator~angry")).toBe("rejected");
+      expect(status(a, "portrait.narrator~angry")).toBe("draft");
+    } finally {
+      await stop();
+    }
+  });
+
+  it("a real --work-folder pins the run, the page says so, and Settings still saves for later", async () => {
+    a = buildWorkspace();
+    b = buildWorkspace();
+    try {
+      setWorkFolder(a.env, a.work, a.root);
+      cli = await startCli(a, [
+        "--work-folder",
+        b.work,
+        "studio",
+        "--port",
+        "0",
+      ]);
+      page = await newPage();
+      await page.goto(`${cli.url}?job=${encodeURIComponent(a.jobPath)}`);
+      await page.locator("#needs").waitFor();
+      expect(await page.locator("#pinned-note").innerText()).toContain(b.work);
+      await pick(page, "scene-a.02~vo-01");
+      await page.locator("#approve").click();
+      await expect
+        .poll(() => rowStatus(page as Page, "scene-a.02~vo-01"))
+        .toBe("final");
+      expect(status(b, "scene-a.02~vo-01")).toBe("final");
+      expect(status(a, "scene-a.02~vo-01")).toBe("draft");
+      await page.locator("#nav-settings").click();
+      expect(await page.locator("#flag-note").innerText()).toContain(
+        "--work-folder",
+      );
+      expect(savedWorkFolder(a.env)).toBe(a.work);
+    } finally {
+      await stop();
     }
   });
 });

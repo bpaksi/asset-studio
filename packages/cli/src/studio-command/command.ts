@@ -1,5 +1,6 @@
 import { type Command, registerCommand, usageError } from "../bin/registry.js";
 import { CliError, EXIT_FAILURE } from "../config/errors.js";
+import { savedWorkFolder } from "../config/settings.js";
 
 /** What the CLI uses of `@asset-studio/studio` (loaded on demand, not a declared dependency). */
 type StudioModule = {
@@ -54,11 +55,24 @@ export const studioCommand: Command = {
       }
     }
     const job = args.options["--job"];
+    // The dispatcher puts the saved folder in ctx.workFolder when no flag was
+    // given. Only a folder that differs from the saved one came from
+    // --work-folder and pins this run; otherwise the studio follows the setting.
+    let pinned = ctx.workFolder;
+    if (pinned !== undefined) {
+      try {
+        if (pinned === savedWorkFolder(ctx.env)) pinned = undefined;
+      } catch (error) {
+        ctx.stderr(
+          `${(error as CliError).code ?? "AS-INTERNAL-1"}: ${(error as Error).message}\n`,
+        );
+      }
+    }
     const studio = await loadStudio();
     await studio.runStudio({
       env: ctx.env,
       cwd: ctx.cwd,
-      workFolder: ctx.workFolder,
+      workFolder: pinned,
       job: typeof job === "string" ? job : undefined,
       port,
       stdout: ctx.stdout,

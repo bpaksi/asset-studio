@@ -65,16 +65,20 @@ function h(tag, attrs) {
 
 function ApiError(code, message, lines) { this.code = code; this.message = message; this.lines = lines || []; }
 
+function errorFrom(data, status) {
+  var e = data && data.error;
+  var code = e && typeof e.code === "string" && e.code ? e.code : "AS-STUDIO-11";
+  var message = e && typeof e.message === "string" && e.message ? e.message : "The studio answered with an error it could not explain (HTTP " + status + ").";
+  return new ApiError(code, message, e && Array.isArray(e.lines) ? e.lines : []);
+}
+
 function api(path, body) {
   var opts = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
   return fetch(path, opts).then(function (res) {
     return res.json().then(function (data) {
-      if (!res.ok) {
-        var e = data && data.error ? data.error : { code: "AS-STUDIO-11", message: "The studio answered with an unreadable error (HTTP " + res.status + ")." };
-        throw new ApiError(e.code, e.message, e.lines);
-      }
+      if (!res.ok) throw errorFrom(data, res.status);
       return data;
-    }, function () { throw new ApiError("AS-STUDIO-11", "The studio answered with an unreadable reply (HTTP " + res.status + ")."); });
+    }, function () { throw errorFrom(null, res.status); });
   }, function (err) { throw new ApiError("AS-STUDIO-11", "The studio could not be reached: " + err.message); });
 }
 
@@ -159,6 +163,7 @@ function viewReview() {
     history.replaceState(null, "", "?" + q.toString());
     loadReview();
   } } }, h("label", {}, "Job file (asset-job.json)", input), h("button", { type: "submit", id: "job-open", text: "Open" })));
+  if (S.fromFlag) main.appendChild(h("p", { id: "pinned-note", class: "dim", text: "Work folder pinned by --work-folder for this run: " + S.folder }));
   main.appendChild(h("div", { id: "review" }));
   if (S.jobPath) loadReview();
 }
@@ -217,7 +222,7 @@ function mediaFailed(row, what, err, el) {
   // The server explains a bad file with its own code; ask it.
   var url = el.currentSrc || el.src;
   return fetch(url).then(function (res) {
-    if (!res.ok) return res.json().then(function (d) { return d.error; });
+    if (!res.ok) return res.json().then(function (d) { var e = errorFrom(d, res.status); return { code: e.code, message: e.message }; }, function () { var e = errorFrom(null, res.status); return { code: e.code, message: e.message }; });
     return { code: "AS-STUDIO-5", message: what + " for " + row.key + " could not be decoded by the browser." };
   }, function (e) { return { code: "AS-STUDIO-11", message: "The studio could not be reached: " + e.message }; })
   .then(function (e) {
@@ -327,6 +332,10 @@ function route() {
   return viewReview();
 }
 
+window.addEventListener("unhandledrejection", function (ev) {
+  var r = ev.reason;
+  showError(r instanceof ApiError ? r : new ApiError("AS-STUDIO-12", "Something went wrong in the page: " + (r && r.message ? r.message : String(r))), true);
+});
 window.addEventListener("hashchange", function () { if (S.folder) route(); });
 refreshState().then(route, function (err) {
   app.textContent = "";

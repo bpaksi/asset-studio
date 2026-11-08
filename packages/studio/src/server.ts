@@ -18,7 +18,7 @@ export const LOOPBACK = "127.0.0.1";
 export type StudioOptions = {
   env: Readonly<Record<string, string | undefined>>;
   cwd: string;
-  /** The work folder for this run only (`--work-folder`, or the saved one). */
+  /** Pins the work folder for this run (only a real `--work-folder`); leave unset to follow the saved setting. */
   workFolder?: string | undefined;
   /** A job file to open first (`--job`). */
   job?: string | undefined;
@@ -194,8 +194,7 @@ export async function startStudio(
     sendJson(res, 200, {
       workFolder: options.workFolder ?? saved ?? null,
       saved: saved ?? null,
-      fromFlag:
-        options.workFolder !== undefined && options.workFolder !== saved,
+      fromFlag: options.workFolder !== undefined,
       job: options.job ?? null,
     });
   };
@@ -298,7 +297,14 @@ export async function startStudio(
 
   const clientError: Handler = async (req, res) => {
     const body = await readBody(req);
-    log(text(body, "code"), `(shown in the page) ${text(body, "message")}`);
+    // One log line, no control characters: the page's text must not forge log lines.
+    const clean = (value: string) =>
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: this strips them
+      value.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").slice(0, 500);
+    log(
+      clean(text(body, "code")),
+      `(shown in the page) ${clean(text(body, "message"))}`,
+    );
     sendJson(res, 200, { ok: true });
   };
 
