@@ -1,7 +1,7 @@
 {
-  "name": "@talking-avatar/cli",
-  "version": "0.0.0",
-  "description": "Command-line build pipeline for talking-avatar.",
+  "name": "@asset-studio/cli",
+  "version": "0.2.0",
+  "description": "Command-line build pipeline for asset-studio.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -38,7 +38,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@talking-avatar/formats": "workspace:*"
+    "@asset-studio/formats": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

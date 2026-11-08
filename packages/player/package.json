@@ -1,11 +1,11 @@
 {
-  "name": "@talking-avatar/player",
-  "version": "0.1.0",
-  "description": "<TalkingAvatar> React player for talking-avatar character folders.",
+  "name": "@asset-studio/player",
+  "version": "0.2.0",
+  "description": "<TalkingAvatar> React player for asset-studio character folders.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bpaksi/talking-avatar.git",
+    "url": "git+https://github.com/bpaksi/asset-studio.git",
     "directory": "packages/player"
   },
   "type": "module",
@@ -45,7 +45,7 @@
     "example": "vite --config example/vite.config.ts"
   },
   "dependencies": {
-    "@talking-avatar/formats": "workspace:*"
+    "@asset-studio/formats": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

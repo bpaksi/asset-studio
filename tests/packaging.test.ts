@@ -91,16 +91,16 @@ describe("npm packaging", () => {
     }
   });
 
-  it("releases formats and player at 0.1.0 and keeps the cli private", () => {
+  it("releases formats and player at 0.2.0 and keeps the cli private", () => {
     for (const name of published) {
       const manifest = readJson(
         resolve(root, "packages", name, "package.json"),
       );
-      expect(manifest.version, name).toBe("0.1.0");
+      expect(manifest.version, name).toBe("0.2.0");
       expect(manifest.private, name).not.toBe(true);
       expect(manifest.repository, name).toEqual({
         type: "git",
-        url: "git+https://github.com/bpaksi/talking-avatar.git",
+        url: "git+https://github.com/bpaksi/asset-studio.git",
         directory: `packages/${name}`,
       });
     }
@@ -108,9 +108,7 @@ describe("npm packaging", () => {
     expect(cli.private).toBe(true);
     expect(cli.publishConfig?.access).toBeUndefined();
     const player = readJson(resolve(root, "packages/player/package.json"));
-    expect(player.dependencies?.["@talking-avatar/formats"]).toBe(
-      "workspace:*",
-    );
+    expect(player.dependencies?.["@asset-studio/formats"]).toBe("workspace:*");
     // Bloodtower runs React 19.3.0.
     expect(player.peerDependencies?.react).toBe("^18.0.0 || ^19.0.0");
     expect(player.dependencies?.react).toBeUndefined();

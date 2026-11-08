@@ -4,7 +4,7 @@ export {
   sampleAudioClock,
   shapeAt,
   visibleShape,
-} from "@talking-avatar/formats";
+} from "@asset-studio/formats";
 export { assetUrl, captionFor, mouthFiles } from "./assets.js";
 export {
   type ClockAudio,

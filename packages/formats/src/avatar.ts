@@ -4,7 +4,7 @@ import { RHUBARB_LETTERS, type RhubarbLetter } from "./rhubarb.js";
 
 // Asset contract v2 (docs/asset-contract.md): one character folder,
 // avatars/<id>/, described by manifest.json. These schemas are browser-safe;
-// the file checks live in validateAvatar (@talking-avatar/formats/node).
+// the file checks live in validateAvatar (@asset-studio/formats/node).
 
 export const MOUTH_MODES = ["frame", "overlay"] as const;
 export type MouthMode = (typeof MOUTH_MODES)[number];

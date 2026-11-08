@@ -1,6 +1,6 @@
-# talking-avatar camera-track contract v1
+# asset-studio camera-track contract v1
 
-Status: **locked (v1), 2026-11-07**. Bob answered the blocking questions ([issue #7](https://github.com/bpaksi/talking-avatar/issues/7)); see *Rulings (2026-11-07)*. It is built in [P2](../plans/P2-asset-studio.md) S9 as the drawn-track escape of `<Painting>`, not as a separate track.
+Status: **locked (v1), 2026-11-07**. Bob answered the blocking questions ([issue #7](https://github.com/bpaksi/asset-studio/issues/7)); see *Rulings (2026-11-07)*. It is built in [P2](../plans/P2-asset-studio.md) S13 as the drawn-track escape of `<Painting>`, not as a separate track.
 
 This is the file contract for an optional camera track: pan and zoom over a still image, timed to the moment, so one wide image can stand in for several stills (Ken Burns). It is additive. [Asset contract v1](asset-contract.md) stays locked; character folders do not change.
 

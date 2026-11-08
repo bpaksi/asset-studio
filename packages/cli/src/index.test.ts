@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { dialogFileText, ttsRequests } from "./index.js";
 
-describe("@talking-avatar/cli", () => {
+describe("@asset-studio/cli", () => {
   it("asks TTS for spoken segments and strips pause markup from the dialog file", () => {
     const line = "Welcome. [pause 0.5] Follow me.";
     expect(

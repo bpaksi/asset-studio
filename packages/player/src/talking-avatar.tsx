@@ -5,7 +5,7 @@ import {
   effectiveMouthMode,
   type RhubarbLetter,
   rhubarbJsonSchema,
-} from "@talking-avatar/formats";
+} from "@asset-studio/formats";
 import {
   type CSSProperties,
   useCallback,

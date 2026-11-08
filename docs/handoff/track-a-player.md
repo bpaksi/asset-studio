@@ -1,5 +1,7 @@
 # Handoff: Track A — formats + player slice, first npm release
 
+> Historical: written for the 0.1.0 release under the old name. The packages are now `@asset-studio/formats` and `@asset-studio/player` (from 0.2.0), and the repo is `bpaksi/asset-studio`. See [CHANGELOG.md](../../CHANGELOG.md).
+
 For Claude Code, run by Bob. Repo: `bpaksi/talking-avatar`, default branch `main`. Package manager: pnpm. Contract: [docs/asset-contract.md](../asset-contract.md).
 
 Goal: ship `@talking-avatar/formats` and `@talking-avatar/player` 0.1.0 early so Bloodtower can install them from npm. `@talking-avatar/cli` is not part of this release.

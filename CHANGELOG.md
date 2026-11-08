@@ -1,6 +1,25 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.2.0 — unreleased
+
+### Renamed to asset-studio
+
+- The packages are now `@asset-studio/formats`, `@asset-studio/player` and `@asset-studio/cli` (still private). Exports, schemas and behaviour are the same as 0.1.0. The asset contract keeps its name and its v2 number.
+- The repo moved from `bpaksi/talking-avatar` to [`bpaksi/asset-studio`](https://github.com/bpaksi/asset-studio). GitHub redirects the old URL.
+- Migrating: replace `@talking-avatar/` with `@asset-studio/` in `package.json` and imports, and pin `0.2.0`. Nothing else changes.
+
+### For Bob: deprecate the old names
+
+Run once `@asset-studio/formats@0.2.0` and `@asset-studio/player@0.2.0` are on npm (needs an npm login with publish rights on `@talking-avatar`):
+
+```sh
+npm deprecate '@talking-avatar/formats@*' "Renamed to @asset-studio/formats. Install @asset-studio/formats@0.2.0 or later; the API is unchanged."
+npm deprecate '@talking-avatar/player@*' "Renamed to @asset-studio/player. Install @asset-studio/player@0.2.0 or later; the API is unchanged."
+```
+
+Check with `npm view @talking-avatar/formats deprecated` and `npm view @talking-avatar/player deprecated`.
+
+## 0.1.0
 
 ### Contract v2: WebP portrait and mouths
 

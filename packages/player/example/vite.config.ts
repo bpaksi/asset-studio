@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
-// Serves the Keeper fixture from @talking-avatar/formats at /keeper/.
+// Serves the Keeper fixture from @asset-studio/formats at /keeper/.
 // `pnpm example --host` exposes it on the LAN for an iPad.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),

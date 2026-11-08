@@ -1,4 +1,4 @@
-import type { RhubarbLetter } from "@talking-avatar/formats";
+import type { RhubarbLetter } from "@asset-studio/formats";
 
 export type MouthCue = {
   start: number;

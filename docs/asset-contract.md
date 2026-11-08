@@ -1,8 +1,8 @@
-# talking-avatar asset contract v2
+# asset-studio asset contract v2
 
 Status: **v2** (current). v1 is locked; v2 is the new version. It changes one thing: `portrait` and `mouths/*` may be WebP as well as PNG. Everything else is as in v1, so every valid v1 folder is a valid v2 folder.
 
-This is the file contract between the artist (Illusionist) and the code: `@talking-avatar/formats` validates it, `@talking-avatar/player` plays it, and consumers such as Bloodtower serve it as static files. It covers the first slice (S2 + thin S5). The fuller `cast.yaml` / `script.yaml` / `line.json` pipeline in [plans/P1-plan.md](../plans/P1-plan.md) still applies to the CLI.
+This is the file contract between the artist (Illusionist) and the code: `@asset-studio/formats` validates it, `@asset-studio/player` plays it, and consumers such as Bloodtower serve it as static files. It covers the first slice (S2 + thin S5). The fuller `cast.yaml` / `script.yaml` / `line.json` pipeline in [plans/P1-plan.md](../plans/P1-plan.md) still applies to the CLI.
 
 ## Layout
 
@@ -110,7 +110,7 @@ Times are seconds. `metadata.soundFile` is informational; use a relative name, n
 
 ## Validation rules (S2 validator)
 
-`@talking-avatar/formats` rejects a character folder unless:
+`@asset-studio/formats` rejects a character folder unless:
 
 1. All 9 letters `X A B C D E F G H` are mapped in `mouths`.
 2. Every referenced file exists: portrait, anchor, each mouth, each line's audio and timing. Portrait and mouth files must be PNG or WebP (checked by content, not extension); size and alpha checks (rule 8) apply to both. Lossy WebP without an alpha channel is opaque, so it fails `overlay` mode.

@@ -1,7 +1,7 @@
 import {
   type AvatarManifest,
   avatarManifestSchema,
-} from "@talking-avatar/formats";
+} from "@asset-studio/formats";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 

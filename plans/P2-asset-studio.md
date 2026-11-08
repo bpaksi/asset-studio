@@ -153,6 +153,8 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - The README says what asset-studio is. The asset contract keeps its name and its v2 number.
   - The release workflow publishes the `@asset-studio` names through trusted publishing. Releasing 0.2.0 of formats and player is a manual step for Bob, recorded here. (Bloodtower A1 step 1 can swap its pins as soon as these two are out.)
   - `npm deprecate` text for `@talking-avatar/formats` and `@talking-avatar/player` is written in CHANGELOG, for Bob to run.
+- Result: built on `feat/s1-rename-asset-studio`, after this plan's revision (#14) and the camera-track lock (#13) merged. Packages renamed to `@asset-studio/*` at 0.2.0, with exports and tests unchanged. The camera-track contract and schema carry the new name. The P1 plan and the two 0.1.0 handoff notes stay as written, as history.
+- Bob's release (manual): npm can't add a trusted publisher to a package that doesn't exist yet, so 0.2.0 of `@asset-studio/formats` then `@asset-studio/player` is published by hand from `main` (`pnpm pack`, then `npm publish <tgz> --access public`), as 0.1.0 was. Then add each package's trusted publisher (owner `bpaksi`, repo `asset-studio`, workflow `release.yml`) and run the two `npm deprecate` lines in CHANGELOG 0.2.0. Later versions go through Actions → release on `main`.
 
 ### S2: Job contract, index, notes and camera edits (formats)
 - Depends on: S1
