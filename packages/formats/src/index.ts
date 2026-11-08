@@ -29,6 +29,20 @@ export {
   ttsCacheMaterial,
 } from "./cache.js";
 export {
+  CAMERA_EASES,
+  CAMERA_MOVES,
+  CAMERA_SPEEDS,
+  type Camera,
+  type CameraCue,
+  type CameraFrame,
+  type CameraTrack,
+  cameraCueSchema,
+  cameraFocusSchema,
+  cameraFrameSchema,
+  cameraSchema,
+  cameraTrackSchema,
+} from "./camera.js";
+export {
   CHARS_PER_SECOND,
   captionText,
   estimateLineSeconds,
@@ -39,6 +53,20 @@ export {
 } from "./captions.js";
 export { buildCueTrack } from "./cue-track.js";
 export { type ImageInfo, readImageInfo } from "./image.js";
+export {
+  assetIdSchema,
+  type DerivedId,
+  derivedIds,
+  ID_PATTERN,
+  isAssetId,
+  type Job,
+  type JobCastMember,
+  type JobLine,
+  type JobMoment,
+  type JobPicture,
+  type JobSound,
+  jobSchema,
+} from "./job.js";
 export { captionOnlyLine } from "./line.js";
 export { applyOverrides, type OverridesFile } from "./overrides.js";
 export {
@@ -91,3 +119,17 @@ export {
   type ShapeId,
 } from "./shapes.js";
 export { readWebpInfo, type WebpInfo } from "./webp.js";
+export {
+  ASSET_STATUSES,
+  type AssetIndex,
+  type AssetStatus,
+  assetSizeSchema,
+  assetStatusSchema,
+  type CameraEdits,
+  cameraEditsSchema,
+  type IndexEntry,
+  indexEntrySchema,
+  indexSchema,
+  type Notes,
+  notesSchema,
+} from "./work-folder.js";
