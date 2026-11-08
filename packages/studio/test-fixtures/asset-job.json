@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "story": "fixture-story",
+  "source": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "style": {
+    "picture": "flat test palette",
+    "references": ["ref/style.webp"]
+  },
+  "profiles": {
+    "dashboard": {"width": 1920, "height": 1080},
+    "ipad": {"width": 1640, "height": 2360},
+    "portrait": {"width": 720, "height": 900}
+  },
+  "cast": [
+    {
+      "id": "narrator",
+      "name": "Narrator",
+      "voice": {"provider": "gemini-tts", "voiceId": "Charon", "style": "calm, even"},
+      "moods": ["neutral", "angry"],
+      "portraits": [{"mood": "angry", "source": "art/narrator-angry.png"}, {"mood": "neutral", "prompt": "a plain test face"}]
+    },
+    {"id": "bystander", "name": "Bystander", "moods": ["neutral", "scared"]}
+  ],
+  "lines": [
+    {"id": "scene-a.02~vo-01", "speaker": "narrator", "mood": "angry", "text": "You come late. [pause 0.4] The others did not."}
+  ],
+  "pictures": [
+    {"id": "painting.stair", "kind": "painting", "profiles": ["dashboard"], "prompt": "a stair at dawn", "glow": true},
+    {"id": "foe.shade", "kind": "foe", "profiles": ["dashboard", "ipad"], "source": "art/shade.png"}
+  ],
+  "moments": [
+    {"id": "scene-a.01", "picture": "painting.stair", "camera": {"move": "push-in", "speed": "slow", "focus": {"x": 0.6, "y": 0.4, "w": 0.3, "h": 0.3}}}
+  ],
+  "sounds": [
+    {"id": "sound.door", "kind": "effect", "source": "sfx/door.wav"}
+  ]
+}
