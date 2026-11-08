@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "story": "lantern-tale-fake",
-  "source": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "source": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
   "style": { "picture": "flat test palette" },
   "profiles": {
     "wide": { "width": 320, "height": 180 },

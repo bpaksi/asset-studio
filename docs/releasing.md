@@ -35,4 +35,4 @@ Follow-up, not done: run the workflow in a GitHub environment with required revi
 
 ## Smoke test
 
-`node scripts/smoke-pack.mjs` packs the four packages, installs the tarballs into a fresh temp project with `npm install`, and runs the installed `asset-studio` bin (`needs`, `render`, `approve`, `export`) on `examples/lantern-tale/asset-job.json`. It runs as the `smoke-pack` job in CI and in the release job. The voice and AI case with `ASSET_STUDIO_FAKE_PROVIDERS=1` is pending until that switch merges.
+`node scripts/smoke-pack.mjs` packs the four packages, installs the tarballs into a fresh temp project with `npm install`, and runs the installed `asset-studio` bin (`needs`, `render`, `approve`, `export`) on `examples/lantern-tale/asset-job.json`. It runs as the `smoke-pack` job in CI and in the release job. A second case runs `render` and `render --ai` with `ASSET_STUDIO_FAKE_PROVIDERS=1` and no key on `examples/lantern-tale-fake` (a voiced line, an AI-made picture and portrait) in its own work folder, then approves and exports.

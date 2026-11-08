@@ -4,7 +4,7 @@
 // approve, export). No npm registry package for @asset-studio/* is needed.
 // Run from the repo root after `pnpm install --frozen-lockfile`:
 //   node scripts/smoke-pack.mjs
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -111,13 +111,51 @@ try {
     "smoke: needs, render, approve, export ran from the installed tarballs",
   );
 
-  // PENDING until the fake-provider switch merges (separate PR, feat/p2-fake-providers):
-  // add a voiced line to a second example job and run
-  //   ASSET_STUDIO_FAKE_PROVIDERS=1 asset-studio render <job>
-  // then check the voice draft exists and exports.
-  console.log(
-    "smoke: PENDING voice/AI case (ASSET_STUDIO_FAKE_PROVIDERS=1 not merged yet)",
+  // Fake providers: a voiced line and an AI-made picture and portrait, no key,
+  // no network, no afconvert. Fake runs need their own work folder (AS-FAKE-2).
+  const fakeJob = join(root, "examples", "lantern-tale-fake", "asset-job.json");
+  const fakeWork = join(tmp, "work-fake");
+  const fakeOut = join(tmp, "exported-fake");
+  const env = { ...process.env, ASSET_STUDIO_FAKE_PROVIDERS: "1" };
+  delete env.GEMINI_API_KEY;
+  const fake = (...args) => {
+    const r = spawnSync(bin, ["--work-folder", fakeWork, ...args], {
+      cwd: project,
+      encoding: "utf8",
+      env,
+    });
+    if (r.status !== 0)
+      fail(`fake ${args[0]} exited ${r.status}:\n${r.stderr}`);
+    return r;
+  };
+  const fakeIds = ["scene-one.02~vo-01", "painting.stair", "portrait.keeper"];
+  const voice = fake("render", fakeJob);
+  const ai = fake("render", fakeJob, "--ai");
+  for (const r of [voice, ai]) {
+    if (!r.stderr.includes("AS-FAKE-1:"))
+      fail(`render: no AS-FAKE-1 line:\n${r.stderr}`);
+  }
+  const fakeNeeds = fake("needs", fakeJob).stdout;
+  for (const id of fakeIds) {
+    if (!new RegExp(`${id}\\s+\\S+\\s+draft`).test(fakeNeeds))
+      fail(`fake needs: ${id} should be a draft:\n${fakeNeeds}`);
+  }
+  for (const id of fakeIds) fake("approve", fakeJob, id);
+  const fakeExported = fake("export", fakeJob, "--out", fakeOut).stdout;
+  if (!fakeExported.includes("exported 3 assets"))
+    fail(`fake export: ${fakeExported}`);
+  const fakeIndex = JSON.parse(
+    readFileSync(join(fakeOut, "export-index.json"), "utf8"),
   );
+  if (
+    Object.keys(fakeIndex.assets).sort().join() !== [...fakeIds].sort().join()
+  )
+    fail(`fake export ids: ${Object.keys(fakeIndex.assets)}`);
+  for (const [id, asset] of Object.entries(fakeIndex.assets)) {
+    if (!existsSync(join(fakeOut, asset.file)))
+      fail(`fake export: missing file for ${id}`);
+  }
+  console.log("smoke: fake-provider render, render --ai, approve, export ran");
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {

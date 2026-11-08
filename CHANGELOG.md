@@ -13,6 +13,7 @@ First release of all four packages together: `@asset-studio/formats`, `@asset-st
 - **AI mode** (`render --ai`): fills missing pictures, mood stills and glow masks as drafts through an image provider (Gemini first). It never makes a final, never regenerates a final asset, and remakes a rejected asset only when it has a redo note. Errors log `AS-AI-*` with the id and the run continues.
 - **Studio review** (`@asset-studio/studio`): a local web page on 127.0.0.1 to look, listen, approve and reject. It changes the work folder only through the CLI library. Start it with `asset-studio studio` (install both packages).
 - **Export**: `export <job> --out <folder>` copies final assets (drafts with `--drafts`) under content-hashed names with an `export-index.json` carrying each asset's kind, size and status.
+- **Fake providers**: `ASSET_STUDIO_FAKE_PROVIDERS=1` renders voice and `--ai` media with no key, network or `afconvert`, for CI and install checks. Output is placeholder media (`AS-FAKE-1`); use a separate work folder for it.
 - Install: `npm install --save-dev @asset-studio/cli` (add `@asset-studio/studio` for the review page). Node 22 or later. Try it on `examples/lantern-tale/asset-job.json`.
 
 ### For Bob: first publish of cli and studio
