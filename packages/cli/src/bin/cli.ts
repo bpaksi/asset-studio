@@ -141,6 +141,26 @@ async function run(argv: readonly string[], ctx: CliContext): Promise<void> {
     return;
   }
 
+  if (registered !== undefined && registered.needsWorkFolder === false) {
+    if (parsed.json || parsed.note !== undefined) {
+      throw usageError(`${registered.name} takes no --json or --note.`);
+    }
+    let workFolder: string | undefined;
+    try {
+      workFolder = resolveWorkFolder(ctx.env, ctx.cwd, parsed.workFolder);
+    } catch (error) {
+      // Only "not set" is expected here; the command shows its own form.
+      if (!(error instanceof CliError && error.code === "AS-CONFIG-1")) {
+        throw error;
+      }
+    }
+    await registered.run(
+      { ...ctx, workFolder },
+      { positionals: args, options: parsed.options },
+    );
+    return;
+  }
+
   // Every other command needs the work folder before anything else.
   const workFolder = resolveWorkFolder(ctx.env, ctx.cwd, parsed.workFolder);
 

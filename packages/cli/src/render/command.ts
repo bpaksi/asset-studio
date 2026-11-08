@@ -41,13 +41,15 @@ export const renderCommand: Command = {
         EXIT_FAILURE,
       );
     }
-    const selected = all.filter(
-      (r) => wanted.includes(r.kind) && (ai || r.ai !== true),
-    );
-    if (only !== undefined && !selected.some((r) => r.kind === only)) {
+    // Source renderers first; AI renderers then fill what is still missing.
+    const selected = all
+      .filter((r) => wanted.includes(r.kind) && (ai || r.ai !== true))
+      .sort((a, b) => Number(a.ai === true) - Number(b.ai === true));
+    if (selected.length === 0) {
+      const missing = wanted.map((k) => `${k}`).join(" and ");
       throw new CliError(
         "AS-RENDER-3",
-        `No ${only} renderer is registered.`,
+        `No ${missing} renderer is registered.`,
         EXIT_FAILURE,
       );
     }
@@ -70,9 +72,15 @@ export const renderCommand: Command = {
         failed += outcome?.failed ?? 0;
       } catch (error) {
         failed += 1;
-        ctx.stderr(
-          `AS-RENDER-1: ${renderer.ai === true ? "AI " : ""}${renderer.kind} renderer failed: ${(error as Error).message}\n`,
-        );
+        if (error instanceof CliError) {
+          ctx.stderr(`${error.code}: ${error.message}\n`);
+          for (const line of error.extraLines) ctx.stderr(`${line}\n`);
+        } else {
+          const text = error instanceof Error ? error.message : String(error);
+          ctx.stderr(
+            `AS-RENDER-1: ${renderer.ai === true ? "AI " : ""}${renderer.kind} renderer failed: ${text}\n`,
+          );
+        }
       }
     };
     for (const renderer of selected) await runOne(renderer);

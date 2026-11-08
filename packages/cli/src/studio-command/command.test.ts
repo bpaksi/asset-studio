@@ -28,10 +28,11 @@ const cli = async (args: string[]) => {
 };
 
 describe("studio (placeholder)", () => {
-  it("fails AS-CONFIG-1 with no work folder", async () => {
+  it("runs with no work folder set (needsWorkFolder is false)", async () => {
     const r = await cli(["studio"]);
-    expect(r.code).toBe(3);
-    expect(r.err).toContain("AS-CONFIG-1");
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("AS-STUDIO-0");
+    expect(r.err).not.toContain("AS-CONFIG-1");
   });
 
   it("fails AS-STUDIO-0 when the folder is set", async () => {

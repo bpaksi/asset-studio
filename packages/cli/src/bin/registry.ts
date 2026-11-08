@@ -11,6 +11,11 @@ export type CliContext = {
 /** What a registered command gets: the CLI context and the resolved work folder. */
 export type CommandContext = CliContext & { workFolder: string };
 
+/** What a command with `needsWorkFolder: false` gets. */
+export type OptionalFolderContext = CliContext & {
+  workFolder: string | undefined;
+};
+
 /** Positionals and the command's own flags (`true` for a flag with no value). */
 export type CommandArgs = {
   positionals: string[];
@@ -32,8 +37,18 @@ export type Command = {
   /** One line shown after the usage in `--help`. */
   summary: string;
   options: Readonly<Record<string, { value: boolean }>>;
-  run(ctx: CommandContext, args: CommandArgs): void | Promise<void>;
-};
+} & (
+  | {
+      /** Default: the dispatcher fails AS-CONFIG-1 before `run` when no folder is set. */
+      needsWorkFolder?: true;
+      run(ctx: CommandContext, args: CommandArgs): void | Promise<void>;
+    }
+  | {
+      /** The command runs with no folder set (studio shows its own setup form). */
+      needsWorkFolder: false;
+      run(ctx: OptionalFolderContext, args: CommandArgs): void | Promise<void>;
+    }
+);
 
 const BUILT_IN = ["config", "needs", "approve", "reject"];
 const commands = new Map<string, Command>();

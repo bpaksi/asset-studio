@@ -7,6 +7,7 @@ export const studioCommand: Command = {
   usage: "studio",
   summary: "Open the review studio in the browser",
   options: {},
+  needsWorkFolder: false,
   run(_ctx, args) {
     if (args.positionals.length > 0) {
       throw usageError("studio takes no arguments.");

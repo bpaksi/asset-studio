@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { main } from "../bin/cli.js";
+import { CliError } from "../config/errors.js";
 import { clearRenderers, type Renderer, registerRenderer } from "./registry.js";
 
 let dir: string;
@@ -92,7 +93,7 @@ describe("render, nothing registered", () => {
     ]) {
       const r = await cli(["render", "asset-job.json", ...args]);
       expect(r.code, args.join(" ")).toBe(1);
-      expect(r.err).toContain("AS-RENDER-");
+      expect(r.err).toContain("AS-RENDER-0: render is not built yet.");
     }
   });
 
@@ -121,7 +122,25 @@ describe("render, nothing registered", () => {
     registerRenderer(ok("picture", []));
     const r = await cli(["render", "asset-job.json", "--ai"]);
     expect(r.code).toBe(1);
-    expect(r.err).toContain("AS-RENDER-3");
+    expect(r.err).toContain("AS-RENDER-3: No AI renderer is registered");
+  });
+
+  it("plain render with only an AI renderer fails AS-RENDER-3 naming both kinds", async () => {
+    const calls: string[] = [];
+    registerRenderer(ok("picture", calls, true));
+    const r = await cli(["render", "asset-job.json"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain(
+      "AS-RENDER-3: No voice and picture renderer is registered.",
+    );
+    expect(calls).toEqual([]);
+    expect(r.out).toBe("");
+  });
+
+  it("--only picture with only a voice renderer fails AS-RENDER-3", async () => {
+    registerRenderer(ok("voice", []));
+    const r = await cli(["render", "asset-job.json", "--only", "picture"]);
+    expect(r.err).toContain("AS-RENDER-3: No picture renderer is registered.");
   });
 });
 
@@ -144,6 +163,59 @@ describe("renderer registry", () => {
     expect(r.code).toBe(0);
     expect(calls).toEqual(["picture", "ai-picture"]);
     expect(r.out).toBe("rendered 4, failed 0\n");
+  });
+
+  it("passes the job and paths to a renderer, and runs source before AI", async () => {
+    const seen: unknown[] = [];
+    const order: string[] = [];
+    registerRenderer({
+      kind: "picture",
+      ai: true,
+      render: () => {
+        order.push("ai");
+        return undefined;
+      },
+    });
+    registerRenderer({
+      kind: "picture",
+      render: (ctx, job, paths) => {
+        order.push("source");
+        seen.push(ctx.workFolder, job.story, paths);
+        return undefined;
+      },
+    });
+    const r = await cli(["render", "asset-job.json", "--ai"]);
+    expect(r.code).toBe(0);
+    expect(order).toEqual(["source", "ai"]);
+    expect(seen[0]).toBe(work);
+    expect(seen[1]).toBe("dracula");
+    expect(seen[2]).toMatchObject({ root: join(work, "dracula") });
+  });
+
+  it("prints a renderer's own CliError code and lines, and counts it failed", async () => {
+    registerRenderer({
+      kind: "voice",
+      render: () => {
+        throw new CliError("AS-VOICE-1", "No GEMINI_API_KEY.", 1, ["Set it."]);
+      },
+    });
+    const r = await cli(["render", "asset-job.json"]);
+    expect(r.err).toContain("AS-VOICE-1: No GEMINI_API_KEY.\nSet it.\n");
+    expect(r.err).not.toContain("AS-RENDER-1");
+    expect(r.err).toContain("AS-RENDER-2: 1 failed.");
+    expect(r.code).toBe(1);
+  });
+
+  it("wraps a non-Error throw as AS-RENDER-1 without printing undefined", async () => {
+    registerRenderer({
+      kind: "voice",
+      render: () => {
+        throw "plain text";
+      },
+    });
+    const r = await cli(["render", "asset-job.json"]);
+    expect(r.err).toContain("AS-RENDER-1: voice renderer failed: plain text");
+    expect(r.err).not.toContain("undefined");
   });
 
   it("counts a failing renderer and still runs the next", async () => {
