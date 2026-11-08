@@ -8,12 +8,13 @@
 ## Sources and launch gate
 
 - Approved scope: [P2 plan](../P2-asset-studio.md), the named step and its dependency/batch sections.
-- Acceptance elaboration, not new decisions: `bpaksi/bloodtower:research/game-design/specs/A1-P2-requirements.md`, source worktree `/workspace/gw-a1-reqs`, commit `27d0ac8`; common C-01/C-02/C-05, relevant P2 step, D5/D13/D14. Requirements marked Default there remain sourced defaults, not additional Bob approvals.
-- Layout check: `origin/main` at `9adc4d8` has no briefs folder/template; #16 adds formats/contracts, #18 adds studio fixtures, neither supplies a brief convention. This checklist uses `plans/briefs/P2-step-<N>.md` with Brief Gate headings.
+- Acceptance elaboration, not new decisions: local **unpublished** requirements at `/workspace/gw-a1-reqs/research/game-design/specs/A1-P2-requirements.md`, commit `27d0ac8`; common C-01/C-02/C-05, relevant P2 step, D5/D13/D14. This is not a durable main citation. Requirements marked Default there remain sourced defaults, not additional Bob approvals.
+- [ ] **Unmet publication gate:** Wright records the published/merged Bloodtower requirements revision at `research/game-design/specs/A1-P2-requirements.md` and verifies these references before implementation launch; local `27d0ac8` alone does not close this gate.
+- Brief layout: `plans/briefs/P2-step-<N>.md` with Brief Gate headings. #16 covers formats/contracts; #18 covers studio descriptor fixtures, not an implementation brief.
 - [ ] Wright confirms S2 (#16) and S3 have merged to main; use their actual library contracts, no private substitute schema/store.
-- [ ] Wright records completion of #18 fixture review and any required fixture corrections. Descriptors/JSON consistency tests alone do not prove decodable media, pixels or browser behavior.
+- [x] #18 merged at `d13194df`. Anvil's independent review **5818293815 — APPROVE** covers **descriptor prep ONLY**, not S7 completion. Descriptors/JSON consistency tests do not prove decodable media, pixels or browser behavior; all implementation ACs below remain open.
 - [ ] This brief is merged to main and completeness checked before implementation starts. This docs-only commit opens no implementation job.
-- Neutral generated fixtures only; no Bloodtower/RtDT art, paid provider, key, hardware or real user work folder. #18 fixture paths are reference inputs, not permission to merge or edit its pending branch. No new fixture contract chosen here.
+- Neutral generated fixtures only; no Bloodtower/RtDT art, paid provider, key, hardware or real user work folder. #18's merged descriptor fixtures are reference inputs, not evidence that S5/S7 implementation or real-media validation is complete. No new fixture contract chosen here.
 
 ## Cutover
 
@@ -43,7 +44,7 @@
 - [x] DEC-394/403: remembered/changeable work folder and local web app.
 - [x] DEC-839: work-folder index owns status; Approve/Reject through library.
 - [x] DEC-843: 0.2 review first; 0.3 camera/portrait editor excluded. No new MEC/UI gameplay change or Loremaster production portrait requirement.
-- [ ] Wright closes S2/S3 merge and #18 fixture-review gates above.
+- [ ] Wright closes S2/S3 merge and unmet requirements-publication gates above. #18 descriptor review is recorded, not S7 acceptance.
 
 ## Pre-launch Touches decisions (Wright; not granted)
 
