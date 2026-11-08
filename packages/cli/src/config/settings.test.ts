@@ -40,6 +40,24 @@ describe("settingsPath", () => {
   });
 });
 
+describe("settingsPath empty/relative env values", () => {
+  it("treats an empty or relative XDG_CONFIG_HOME as unset on linux", () => {
+    const expected = join("/h", ".config", "asset-studio", "settings.json");
+    expect(settingsPath({ HOME: "/h", XDG_CONFIG_HOME: "" }, "linux")).toBe(
+      expected,
+    );
+    expect(settingsPath({ HOME: "/h", XDG_CONFIG_HOME: "rel" }, "linux")).toBe(
+      expected,
+    );
+  });
+
+  it("treats an empty APPDATA as unset on win32", () => {
+    expect(settingsPath({ HOME: "/h", APPDATA: "" }, "win32")).toBe(
+      join("/h", "AppData", "Roaming", "asset-studio", "settings.json"),
+    );
+  });
+});
+
 describe("work folder setting", () => {
   const env = () => ({ ASSET_STUDIO_CONFIG_DIR: join(dir, "cfg") });
 

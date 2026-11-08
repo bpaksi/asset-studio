@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { CliError, configNotSet, EXIT_FAILURE, EXIT_USAGE } from "./errors.js";
 
@@ -19,7 +19,10 @@ export function settingsPath(
   if (override !== undefined && override !== "") {
     return join(resolve(override), "settings.json");
   }
-  const home = env.HOME ?? homedir();
+  // Empty or relative values count as unset (XDG spec; also guards APPDATA).
+  const absoluteOr = (value: string | undefined, fallback: string): string =>
+    value !== undefined && isAbsolute(value) ? value : fallback;
+  const home = absoluteOr(env.HOME, homedir());
   if (platform === "darwin") {
     return join(
       home,
@@ -30,10 +33,10 @@ export function settingsPath(
     );
   }
   if (platform === "win32") {
-    const base = env.APPDATA ?? join(home, "AppData", "Roaming");
+    const base = absoluteOr(env.APPDATA, join(home, "AppData", "Roaming"));
     return join(base, "asset-studio", "settings.json");
   }
-  const base = env.XDG_CONFIG_HOME ?? join(home, ".config");
+  const base = absoluteOr(env.XDG_CONFIG_HOME, join(home, ".config"));
   return join(base, "asset-studio", "settings.json");
 }
 
