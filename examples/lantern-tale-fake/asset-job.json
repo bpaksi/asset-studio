@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "story": "lantern-tale-fake",
+  "source": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "style": { "picture": "flat test palette" },
+  "profiles": {
+    "wide": { "width": 320, "height": 180 },
+    "portrait": { "width": 72, "height": 90 }
+  },
+  "cast": [
+    {
+      "id": "keeper",
+      "name": "The Keeper",
+      "voice": { "provider": "gemini-tts", "voiceId": "Charon" },
+      "moods": ["neutral"]
+    }
+  ],
+  "lines": [
+    {
+      "id": "scene-one.02~vo-01",
+      "speaker": "keeper",
+      "text": "You come late. [pause 0.4] The others did not."
+    }
+  ],
+  "pictures": [
+    {
+      "id": "painting.stair",
+      "kind": "painting",
+      "profiles": ["wide"],
+      "prompt": "a stair at dawn"
+    }
+  ],
+  "moments": [{ "id": "scene-one.01", "picture": "painting.stair" }],
+  "sounds": []
+}

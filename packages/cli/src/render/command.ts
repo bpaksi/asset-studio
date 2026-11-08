@@ -4,6 +4,8 @@ import { type Command, registerCommand, usageError } from "../bin/registry.js";
 import { CliError, EXIT_FAILURE } from "../config/errors.js";
 import { loadJob } from "../needs/needs.js";
 import { workPaths } from "../store/store.js";
+import { fakeProvidersOn } from "../tts/fake.js";
+import { beginFakeRun, dropFakeEntries, endFakeRun } from "./fake-ledger.js";
 import {
   type Renderer,
   type RenderKind,
@@ -85,7 +87,23 @@ export const renderCommand: Command = {
         }
       }
     };
-    for (const renderer of selected) await runOne(renderer);
+    const fakes = fakeProvidersOn(ctx.env);
+    let before: Record<string, string> = {};
+    if (fakes) {
+      before = beginFakeRun(paths, job.story);
+    } else {
+      const dropped = dropFakeEntries(paths);
+      if (dropped.length > 0) {
+        ctx.stderr(
+          `AS-FAKE-4: dropped ${dropped.length} placeholder asset(s) from an earlier fake run; they are rendered again for real.\n`,
+        );
+      }
+    }
+    try {
+      for (const renderer of selected) await runOne(renderer);
+    } finally {
+      if (fakes) endFakeRun(paths, before);
+    }
 
     ctx.stdout(`rendered ${rendered}, failed ${failed}\n`);
     if (failed > 0) {
