@@ -5,8 +5,12 @@ import type { Job } from "@asset-studio/formats";
 import type { CommandContext } from "../bin/registry.js";
 import type { WorkPaths } from "../store/store.js";
 
-/** Where the job file is. Both are absolute. */
-export type RenderJob = { jobPath: string; jobDir: string };
+/**
+ * Where the job file is (both absolute), and whether `render` was given
+ * `--ai`. A source renderer reads `ai` to leave what AI mode will fill (for
+ * example a missing hand-placed glow mask) instead of failing it.
+ */
+export type RenderJob = { jobPath: string; jobDir: string; ai: boolean };
 
 /**
  * Resolve a path written in the job (`art/x.png`, `ref/y.webp`, `sfx/z.wav`)

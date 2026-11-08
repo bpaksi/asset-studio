@@ -345,6 +345,27 @@ describe("P2-06a: AI mode fills what is missing as drafts", () => {
     }
   });
 
+  it("plain render still fails AS-GLOW-2 on a source painting with no hand mask", async () => {
+    await sharp(await solid(64, 32, [200, 10, 10])).toFile(
+      join(dir, "art", "p.png"),
+    );
+    fakeWith();
+    const job = baseJob({
+      pictures: [
+        {
+          id: "painting.p",
+          kind: "painting",
+          profiles: ["wide"],
+          source: "art/p.png",
+          glow: true,
+        },
+      ],
+    });
+    const result = await run(job, ["render", "asset-job.json"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("AS-GLOW-2");
+  });
+
   it("lights a source painting whose hand mask is absent, at the painting's own size", async () => {
     await sharp(await solid(64, 32, [200, 10, 10])).toFile(
       join(dir, "art", "p.png"),
@@ -362,12 +383,18 @@ describe("P2-06a: AI mode fills what is missing as drafts", () => {
       ],
     });
     const result = await run(job);
-    // S5 reports the missing hand mask; AI mode still fills it.
-    expect(result.err).toContain("AS-GLOW-2");
-    expect(result.code).toBe(1);
+    // Under --ai a missing hand mask is left for AI mode: no AS-GLOW-2, not counted.
+    expect(result.err).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("rendered 2, failed 0");
     expect(fake.calls.map((c) => c.id)).toEqual(["glow.p"]);
     expect(fake.calls[0]?.size).toEqual({ width: 64, height: 32 });
     expect(readIdx()["glow.p"]?.status).toBe("draft");
+    // With the AI mask in place, a plain render leaves it alone and exits 0.
+    await run(undefined, ["approve", "asset-job.json", "glow.p"]);
+    const plain = await run(undefined, ["render", "asset-job.json"]);
+    expect(plain.code).toBe(0);
+    expect(readIdx()["glow.p"]?.status).toBe("final");
   });
 });
 

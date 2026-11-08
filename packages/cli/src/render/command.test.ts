@@ -249,7 +249,7 @@ describe("render, job folder", () => {
   it("passes the absolute job path and folder when run from another folder", async () => {
     const other = join(dir, "elsewhere");
     mkdirSync(other);
-    let got: { jobPath: string; jobDir: string } | undefined;
+    let got: { jobPath: string; jobDir: string; ai: boolean } | undefined;
     registerRenderer({
       kind: "voice",
       render: (_ctx, _job, _paths, where) => {
@@ -259,7 +259,31 @@ describe("render, job folder", () => {
     });
     const r = await cli(["render", "../asset-job.json"], true, other);
     expect(r.code).toBe(0);
-    expect(got).toEqual({ jobPath: join(dir, "asset-job.json"), jobDir: dir });
+    expect(got).toEqual({
+      jobPath: join(dir, "asset-job.json"),
+      jobDir: dir,
+      ai: false,
+    });
+  });
+});
+
+describe("render, --ai flag for renderers", () => {
+  it("sets where.ai from --ai", async () => {
+    let got: boolean | undefined;
+    registerRenderer({
+      kind: "voice",
+      render: (_ctx, _job, _paths, where) => {
+        got = where.ai;
+        return { rendered: 0, failed: 0 };
+      },
+    });
+    registerRenderer({
+      kind: "voice",
+      ai: true,
+      render: () => ({ rendered: 0, failed: 0 }),
+    });
+    await cli(["render", "asset-job.json", "--ai"], true);
+    expect(got).toBe(true);
   });
 });
 
