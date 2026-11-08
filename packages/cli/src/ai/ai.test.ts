@@ -420,13 +420,12 @@ describe("P2-06b: redo notes", () => {
     expect(() => readIdx()).toThrow();
   });
 
-  it("a note changes the request, so the new draft is a new file; the old file and its bytes survive", async () => {
-    const job = paintingJob(["painting.a"]);
+  it("redo: a rejected asset with a note is remade as a draft with that note; old file stays; note cleared", async () => {
+    const job = paintingJob(["painting.a", "painting.b"]);
     fakeWith();
     await run(job);
     const before = storeSnapshot();
     const oldEntry = readIdx()["painting.a"];
-    // The person rejects it, then it is made missing again by removing the entry.
     await run(undefined, [
       "reject",
       "asset-job.json",
@@ -434,12 +433,53 @@ describe("P2-06b: redo notes", () => {
       "--note",
       "too bright",
     ]);
-    const rejectedRun = await run(job);
-    expect(rejectedRun.code).toBe(0);
-    // rejected is never regenerated, even with a note present
+    await run(undefined, [
+      "reject",
+      "asset-job.json",
+      "painting.b",
+      "--note",
+      "too dark",
+    ]);
+    putNotes({ "painting.a": ["too bright"] }); // b's note was consumed elsewhere
+    const fake = fakeWith();
+    const result = await run(job);
+    expect(result.code).toBe(0);
+    expect(fake.calls.map((c) => c.id)).toEqual(["painting.a"]);
+    expect(fake.calls[0]?.notes).toEqual(["too bright"]);
+    const entry = readIdx()["painting.a"];
+    expect(entry?.status).toBe("draft");
+    expect(entry?.file).not.toBe(oldEntry?.file);
+    expect(readIdx()["painting.b"]?.status).toBe("rejected");
+    const after = storeSnapshot();
+    for (const [name, hash] of Object.entries(before)) {
+      expect(after[name]).toBe(hash);
+    }
+    expect(existsNotes()).toBe(false);
+  });
+
+  it("redo: a failed request keeps the asset rejected and keeps the note", async () => {
+    const job = paintingJob(["painting.a"]);
+    fakeWith();
+    await run(job);
+    await run(undefined, [
+      "reject",
+      "asset-job.json",
+      "painting.a",
+      "--note",
+      "more fog",
+    ]);
+    const before = readIdx()["painting.a"];
+    fakeWith({ failIds: ["painting.a"] });
+    const result = await run(job);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("AS-AI-4: painting.a");
+    expect(readIdx()["painting.a"]).toEqual(before);
     expect(readIdx()["painting.a"]?.status).toBe("rejected");
-    expect(readIdx()["painting.a"]?.file).toBe(oldEntry?.file);
-    expect(storeSnapshot()).toEqual(before);
+    expect(readNotesFile()).toEqual({ "painting.a": ["more fog"] });
+    const fake = fakeWith();
+    expect((await run(job)).code).toBe(0);
+    expect(fake.calls[0]?.notes).toEqual(["more fog"]);
+    expect(readIdx()["painting.a"]?.status).toBe("draft");
   });
 
   it("a redo note on a missing asset changes the inputs hash and the stored file; the earlier file stays", async () => {
@@ -488,7 +528,7 @@ describe("P2-06c: failures and protected statuses", () => {
     expect(Object.keys(idx).sort()).toEqual(["painting.a", "painting.c"]);
   });
 
-  it("never regenerates final or rejected assets", async () => {
+  it("never regenerates a final asset (even with a note) or a rejected one with no note", async () => {
     const job = paintingJob(["painting.a", "painting.b", "painting.c"]);
     fakeWith();
     await run(job);
@@ -500,6 +540,8 @@ describe("P2-06c: failures and protected statuses", () => {
       "--note",
       "no",
     ]);
+    // a: final with a stray note; b: rejected, its note gone
+    putNotes({ "painting.a": ["ignored"] });
     const before = readFileSync(join(work, story, "index.json"), "utf8");
     const snap = storeSnapshot();
     const fake = fakeWith();

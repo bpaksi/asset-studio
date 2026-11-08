@@ -82,10 +82,27 @@ type Unit = {
   subject?: { name: string; mood: string };
 };
 
-const statusOf = (index: ReturnType<typeof readIndex>, key: string): string =>
-  index[key]?.status ?? "missing";
+/**
+ * An asset AI mode makes: `missing`, or `rejected` with a pending redo note.
+ * `draft` and `final` are never remade, and a rejected asset with no note stays rejected.
+ */
+const wanted = (
+  index: ReturnType<typeof readIndex>,
+  notes: ReturnType<typeof readNotes>,
+  key: string,
+): boolean => {
+  const status = index[key]?.status ?? "missing";
+  return (
+    status === "missing" ||
+    (status === "rejected" && (notes[key]?.length ?? 0) > 0)
+  );
+};
 
-function planUnits(job: Job, index: ReturnType<typeof readIndex>): Unit[] {
+function planUnits(
+  job: Job,
+  index: ReturnType<typeof readIndex>,
+  pending: ReturnType<typeof readNotes>,
+): Unit[] {
   const units: Unit[] = [];
   const styleRefs = job.style?.references ?? [];
 
@@ -98,7 +115,7 @@ function planUnits(job: Job, index: ReturnType<typeof readIndex>): Unit[] {
           : `portrait.${member.id}~${mood}`;
       const portrait = member.portraits?.find((p) => p.mood === mood);
       if (portrait?.source !== undefined) continue; // S5's, never invented here
-      if (statusOf(index, id) !== "missing") continue;
+      if (!wanted(index, pending, id)) continue;
       const unit: Unit = {
         kind: "still",
         id,
@@ -119,7 +136,7 @@ function planUnits(job: Job, index: ReturnType<typeof readIndex>): Unit[] {
           key: profileKey(id, profiles, profile),
           profile,
         }))
-        .filter(({ key }) => statusOf(index, key) === "missing");
+        .filter(({ key }) => wanted(index, pending, key));
     const keys = missing(picture.id);
     if (picture.source === undefined && keys.length > 0) {
       const unit: Unit = {
@@ -204,7 +221,7 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
       assetKeys(job); // fails closed (AS-ID-3) before anything is written
       const redact = redactor(ctx.env);
       const outcome: RenderOutcome = { rendered: 0, failed: 0 };
-      const units = planUnits(job, readIndex(paths));
+      const units = planUnits(job, readIndex(paths), readNotes(paths));
       if (units.length === 0) return outcome;
       // A missing key (AS-AI-1) is thrown to `render`, which logs it and counts it.
       const provider = deps.provider(ctx.env);
