@@ -44,7 +44,7 @@ Only `final` assets are exported. `--drafts` adds `draft` ones. `rejected` and `
 
 ## Keys
 
-The key is the asset ID, with one rule: a picture with two or more profiles has one entry per profile, keyed `<id>~<profile>` (`foe.shade~board`, `foe.shade~ipad`); there is no bare entry. A picture with one profile keeps its bare ID. Mood stills are `portrait.<speaker>~<mood>`, the neutral still `portrait.<speaker>`, and a glow mask is `glow.<entry>`.
+The key is the asset ID, with one rule: a picture with two or more profiles has one entry per profile, keyed `<id>~<profile>` (`foe.shade~board`, `foe.shade~ipad`); there is no bare entry. A picture with one profile keeps its bare ID. Mood stills are `portrait.<speaker>~<mood>`, the neutral still `portrait.<speaker>`, and a glow mask is `glow.<entry>`. A glow mask follows its painting's profiles: with two or more, one entry per profile (`glow.shade~board`, `glow.shade~ipad`), no bare entry. A picture whose id already has a `~variant` and has two or more profiles has no valid key; export fails with `AS-ID-3` before writing anything, and a previous export is left as it was.
 
 ## Failure
 

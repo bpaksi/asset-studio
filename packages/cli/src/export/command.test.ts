@@ -116,15 +116,9 @@ const readExport = (folder: string) =>
 
 const listing = (folder: string) => readdirSync(folder).sort();
 
-/**
- * approve/reject know only bare IDs until S5's key expansion merges, so a
- * per-profile key gets its status straight in the index (test setup only).
- */
 const setStatus = (key: string, status: "final" | "rejected") => {
-  const index = readIndex(paths());
-  const entry = index[key];
-  if (entry === undefined) throw new Error(`no entry ${key}`);
-  writeIndex(paths(), { ...index, [key]: { ...entry, status } });
+  if (status === "final") approve(makeJob(), paths(), key);
+  else reject(makeJob(), paths(), key, "not good");
 };
 
 /** line final, painting final, glow draft, foe~board rejected, sound draft. */
@@ -262,6 +256,51 @@ describe("export", () => {
     expect(doc.assets["foe.shade"]).toBeUndefined();
     // a one-profile picture keeps its bare id
     expect(doc.assets["painting.n1-house"]).toBeDefined();
+  });
+
+  it("a glow mask of a multi-profile picture exports one entry per profile", async () => {
+    const job = makeJob();
+    const shade = job.pictures[1];
+    if (shade === undefined) throw new Error("no picture");
+    shade.glow = true;
+    writeJob(job);
+    draft("glow.shade~board", "glow", "webp", "glow-b");
+    draft("glow.shade~ipad", "glow", "webp", "glow-i");
+    approve(job, paths(), "glow.shade~board");
+    approve(job, paths(), "glow.shade~ipad");
+    const out = join(dir, "out");
+    expect((await cli(["export", jobPath(), "--out", out])).code).toBe(0);
+    const doc = readExport(out);
+    expect(Object.keys(doc.assets).sort()).toEqual([
+      "glow.shade~board",
+      "glow.shade~ipad",
+    ]);
+  });
+
+  it("a ~variant picture with 2+ profiles fails with AS-ID-3 and keeps the previous export", async () => {
+    seed();
+    const out = join(dir, "out");
+    expect((await cli(["export", jobPath(), "--out", out])).code).toBe(0);
+    const before = listing(out).map((n) => [
+      n,
+      readFileSync(join(out, n), "utf8"),
+    ]);
+    const job = makeJob();
+    job.pictures.push({
+      id: "foe.shade~night",
+      kind: "foe",
+      profiles: ["board", "ipad"],
+      prompt: "x",
+    });
+    writeJob(job);
+    const r = await cli(["export", jobPath(), "--out", out]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("AS-ID-3");
+    const after = listing(out).map((n) => [
+      n,
+      readFileSync(join(out, n), "utf8"),
+    ]);
+    expect(after).toEqual(before);
   });
 
   it("an empty final set writes an empty valid index and no media", async () => {
