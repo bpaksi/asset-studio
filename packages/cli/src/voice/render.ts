@@ -37,6 +37,11 @@ import {
   sha256,
   type WorkPaths,
 } from "../store/store.js";
+import {
+  announceFake,
+  createFakeTtsProvider,
+  fakeProvidersOn,
+} from "../tts/fake.js";
 import { geminiFromEnv } from "../tts/gemini.js";
 import {
   providerRegistry,
@@ -45,13 +50,27 @@ import {
 } from "../tts/provider.js";
 import { parseWav, pcmToWav } from "../tts/wav.js";
 import { type AudioConverter, afconvertConverter } from "./audio.js";
+import { fakeConverter } from "./fake-audio.js";
 
 export type VoiceDeps = {
   providers: TtsProviderRegistry;
   converter: AudioConverter;
 };
 
-export const defaultVoiceDeps = (): VoiceDeps => ({
+export const defaultVoiceDeps = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): VoiceDeps =>
+  fakeProvidersOn(env)
+    ? {
+        providers: providerRegistry({
+          "gemini-tts": () => createFakeTtsProvider("gemini-tts"),
+          gemini: () => createFakeTtsProvider("gemini"),
+        }),
+        converter: fakeConverter,
+      }
+    : realVoiceDeps();
+
+const realVoiceDeps = (): VoiceDeps => ({
   providers: providerRegistry({
     "gemini-tts": (env) => geminiFromEnv(env),
     gemini: (env) => geminiFromEnv(env),
@@ -285,12 +304,13 @@ async function renderSound(
   });
 }
 
-export function createVoiceRenderer(
-  deps: VoiceDeps = defaultVoiceDeps(),
-): Renderer {
+export function createVoiceRenderer(fixedDeps?: VoiceDeps): Renderer {
   return {
     kind: "voice",
     async render(ctx, job, paths, where): Promise<RenderOutcome> {
+      const fakes = fixedDeps === undefined && fakeProvidersOn(ctx.env);
+      const deps = fixedDeps ?? defaultVoiceDeps(ctx.env);
+      if (fakes) announceFake(ctx);
       const redact = redactor(ctx.env);
       let rendered = 0;
       let failed = 0;

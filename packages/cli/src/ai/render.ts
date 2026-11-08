@@ -31,6 +31,8 @@ import {
   withStoryLock,
   writeNotes,
 } from "../store/store.js";
+import { announceFake, fakeProvidersOn } from "../tts/fake.js";
+import { createFakeImageProvider } from "./fake.js";
 import { geminiImageFromEnv } from "./gemini.js";
 import { currentMaster, hasAiMaster, keepAiMaster } from "./masters.js";
 import type { ImageInput, ImageProvider, ImageRequest } from "./provider.js";
@@ -40,7 +42,8 @@ type Env = Readonly<Record<string, string | undefined>>;
 export type AiDeps = { provider(env: Env): ImageProvider };
 
 export const defaultAiDeps = (): AiDeps => ({
-  provider: (env) => geminiImageFromEnv(env),
+  provider: (env) =>
+    fakeProvidersOn(env) ? createFakeImageProvider() : geminiImageFromEnv(env),
 });
 
 /** Remove the secret from text before it can reach a log or a file. */
@@ -216,11 +219,12 @@ function clearNotes(
   });
 }
 
-export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
+export function createAiRenderer(fixedDeps?: AiDeps): Renderer {
   return {
     kind: "picture",
     ai: true,
     async render(ctx, job, paths, where): Promise<RenderOutcome> {
+      const deps = fixedDeps ?? defaultAiDeps();
       assetKeys(job); // fails closed (AS-ID-3) before anything is written
       const redact = redactor(ctx.env);
       const outcome: RenderOutcome = { rendered: 0, failed: 0 };
@@ -228,6 +232,9 @@ export function createAiRenderer(deps: AiDeps = defaultAiDeps()): Renderer {
       if (units.length === 0) return outcome;
       // A missing key (AS-AI-1) is thrown to `render`, which logs it and counts it.
       const provider = deps.provider(ctx.env);
+      if (fixedDeps === undefined && fakeProvidersOn(ctx.env)) {
+        announceFake(ctx);
+      }
 
       const fail = (id: string, error: unknown): void => {
         outcome.failed += 1;
