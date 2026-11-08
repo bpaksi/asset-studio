@@ -12,9 +12,10 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
-import { derivedIds, type IndexEntry, type Job } from "@asset-studio/formats";
+import type { IndexEntry, Job } from "@asset-studio/formats";
 
 import { CliError } from "../config/errors.js";
+import { assetKeys } from "../needs/needs.js";
 import { readIndex, sha256, type WorkPaths } from "../store/store.js";
 
 export const EXPORT_INDEX_FILE = "export-index.json";
@@ -36,33 +37,6 @@ export type ExportIndex = {
   source: string;
   assets: Record<string, ExportEntry>;
 };
-
-type Key = { key: string; id: string; kind: string };
-
-/**
- * The index key of every asset. A picture with 2+ profiles has one key per
- * profile, `<id>~<profile>`; one profile keeps the bare id. Same rule as
- * S5's helper; switch to it once S5 has merged.
- */
-export function exportKeys(job: Job): Key[] {
-  const pictures = new Map(job.pictures.map((p) => [p.id, p]));
-  const out: Key[] = [];
-  for (const derived of derivedIds(job)) {
-    const picture = pictures.get(derived.id);
-    if (picture !== undefined && picture.profiles.length >= 2) {
-      for (const profile of picture.profiles) {
-        out.push({
-          key: `${derived.id}~${profile}`,
-          id: derived.id,
-          kind: derived.kind,
-        });
-      }
-    } else {
-      out.push({ key: derived.id, id: derived.id, kind: derived.kind });
-    }
-  }
-  return out;
-}
 
 const STORE_NAME = /^([0-9a-f]{64})\.([a-z0-9]+)$/;
 
@@ -155,7 +129,7 @@ export function exportJob(
   const assets: Record<string, ExportEntry> = {};
   const copies = new Map<string, string>();
 
-  for (const { key, id, kind } of exportKeys(job)) {
+  for (const { key, assetId: id, kind } of assetKeys(job)) {
     const entry = index[key];
     if (entry === undefined || !wanted.includes(entry.status)) continue;
     const match = entry.file === null ? null : STORE_NAME.exec(entry.file);
