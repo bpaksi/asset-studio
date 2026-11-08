@@ -13,6 +13,7 @@ import {
   loadJob,
   reject,
 } from "../needs/needs.js";
+import { readLedger } from "../render/fake-ledger.js";
 import { workPaths } from "../store/store.js";
 import "./commands.js";
 import {
@@ -208,7 +209,13 @@ async function run(argv: readonly string[], ctx: CliContext): Promise<void> {
   if (command === "approve") {
     if (parsed.note !== undefined) throw usageError("approve takes no --note.");
     const job = loadJob(resolve(ctx.cwd, jobPath));
-    approve(job, workPaths(workFolder, job.story), id);
+    const paths = workPaths(workFolder, job.story);
+    approve(job, paths, id);
+    if (readLedger(paths).includes(id)) {
+      ctx.stderr(
+        `AS-FAKE-3: ${id} is placeholder media from a fake run (ASSET_STUDIO_FAKE_PROVIDERS=1); do not ship it.\n`,
+      );
+    }
     ctx.stdout(`${id}: final\n`);
     return;
   }
