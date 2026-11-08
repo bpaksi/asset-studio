@@ -53,7 +53,10 @@ function deps(...providers: ReturnType<typeof fakeProvider>[]): VoiceDeps {
 async function run(job: Job, d: VoiceDeps, env = {}) {
   const ctx = makeCtx(dir, work, env);
   const paths = workPaths(work, job.story);
-  const outcome = await createVoiceRenderer(d).render(ctx, job, paths);
+  const outcome = await createVoiceRenderer(d).render(ctx, job, paths, {
+    jobPath: join(dir, "job.json"),
+    jobDir: dir,
+  });
   return { ctx, paths, outcome: outcome as RenderOutcome };
 }
 
@@ -565,6 +568,44 @@ describe("job sounds", () => {
     expect(outcome).toEqual({ rendered: 1, failed: 1 });
     expect(readIndex(paths)["sound.bell"]?.size).toEqual({ seconds: 1.5 });
     expect(ctx.err).toContain("AS-VOICE-8: sound.gone");
+  });
+
+  it("resolves a relative sound source from the job folder, not the cwd, and rejects an empty path", async () => {
+    mkdirSync(join(dir, "jobs", "sfx"), { recursive: true });
+    const wav = pcmToWav(new Uint8Array(48000), 24000, 1);
+    writeFileSync(join(dir, "jobs", "sfx", "door.wav"), wav);
+    const job = makeJob([{ id: "line.q", text: "Hi." }], undefined, [
+      { id: "sound.door", kind: "effect", source: "sfx/door.wav" },
+      { id: "sound.empty", kind: "effect", source: " " },
+    ]);
+    const jobPath = join(dir, "jobs", "job.json");
+    writeFileSync(jobPath, JSON.stringify(job));
+    const elsewhere = join(dir, "elsewhere");
+    mkdirSync(elsewhere);
+    clearRenderers();
+    registerRenderer(createVoiceRenderer(deps(fakeProvider("fake-a"))));
+    let err = "";
+    const code = await main(
+      ["--work-folder", work, "render", "../jobs/job.json", "--only", "voice"],
+      {
+        env: {
+          PATH: process.env.PATH,
+          ASSET_STUDIO_CONFIG_DIR: join(dir, "c"),
+        },
+        cwd: elsewhere,
+        stdout: () => {},
+        stderr: (t) => {
+          err += t;
+        },
+      },
+    );
+    clearRenderers();
+    expect(code).toBe(1);
+    expect(err).toContain("AS-VOICE-8: sound.empty");
+    expect(err).not.toContain("sound.door");
+    expect(readIndex(workPaths(work, job.story))["sound.door"]?.status).toBe(
+      "draft",
+    );
   });
 
   it("does not turn a final sound back into a draft on a re-render", async () => {

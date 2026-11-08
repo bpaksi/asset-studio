@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { extname, isAbsolute, join, resolve } from "node:path";
+import { extname, join } from "node:path";
 
 import {
   audioSplicePlan,
@@ -29,6 +29,7 @@ import {
   type Renderer,
   type RenderOutcome,
   registerRenderer,
+  resolveJobPath,
 } from "../render/registry.js";
 import {
   putFile,
@@ -237,14 +238,15 @@ async function renderLine(
 }
 
 async function renderSound(
-  ctx: CommandContext,
+  jobDir: string,
   sound: Job["sounds"][number],
   paths: WorkPaths,
   deps: VoiceDeps,
 ): Promise<void> {
-  const path = isAbsolute(sound.source)
-    ? sound.source
-    : resolve(ctx.cwd, sound.source);
+  if (sound.source.trim() === "") {
+    return fail("AS-VOICE-8", "sound source path is empty.");
+  }
+  const path = resolveJobPath(jobDir, sound.source);
   let bytes: Uint8Array;
   try {
     bytes = readFileSync(path);
@@ -288,7 +290,7 @@ export function createVoiceRenderer(
 ): Renderer {
   return {
     kind: "voice",
-    async render(ctx, job, paths): Promise<RenderOutcome> {
+    async render(ctx, job, paths, where): Promise<RenderOutcome> {
       const redact = redactor(ctx.env);
       let rendered = 0;
       let failed = 0;
@@ -356,7 +358,7 @@ export function createVoiceRenderer(
 
       for (const sound of job.sounds) {
         try {
-          await renderSound(ctx, sound, paths, deps);
+          await renderSound(where.jobDir, sound, paths, deps);
           rendered += 1;
         } catch (error) {
           report(sound.id, error);
