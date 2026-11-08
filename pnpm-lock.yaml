@@ -23,7 +23,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@talking-avatar/formats':
+      '@asset-studio/formats':
         specifier: workspace:*
         version: link:../formats
     devDependencies:
@@ -55,7 +55,7 @@ importers:
 
   packages/player:
     dependencies:
-      '@talking-avatar/formats':
+      '@asset-studio/formats':
         specifier: workspace:*
         version: link:../formats
     devDependencies:

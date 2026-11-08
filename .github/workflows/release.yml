@@ -1,6 +1,6 @@
 name: release
 
-# Manual only. Publishes @talking-avatar/formats then @talking-avatar/player
+# Manual only. Publishes @asset-studio/formats then @asset-studio/player
 # via npm trusted publishing (GitHub OIDC, workflow release.yml, no environment).
 # 0.1.0 was published by hand; this job does not use a registry secret.
 on:

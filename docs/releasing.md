@@ -1,15 +1,15 @@
 # Releasing
 
-`@talking-avatar/formats` and `@talking-avatar/player` publish to npm. `@talking-avatar/cli` stays private.
+`@asset-studio/formats` and `@asset-studio/player` publish to npm. `@asset-studio/cli` stays private.
 
 0.1.0 was published by hand. Later versions use npm trusted publishing (GitHub Actions OIDC, workflow `release.yml`, no environment, no `NPM_TOKEN`).
 
 ## One-time npm setup
 
-On npmjs.com, for each of `@talking-avatar/formats` and `@talking-avatar/player`, add a Trusted Publisher (Settings → Trusted Publisher → GitHub Actions):
+On npmjs.com, for each of `@asset-studio/formats` and `@asset-studio/player`, add a Trusted Publisher (Settings → Trusted Publisher → GitHub Actions):
 
 - Organization or user: `bpaksi`
-- Repository: `talking-avatar`
+- Repository: `asset-studio`
 - Workflow filename: `release.yml` (filename only, including `.yml`; not a path)
 - Environment: leave blank (no environment)
 - Allowed actions: check **Allow `npm publish`**. Trusted publisher configurations created after 2026-09-03 default to `npm stage publish` only; direct `npm publish` is opt-in. This repo's Release workflow runs `npm publish`, so a new config that leaves that box unchecked will reject the first OIDC run. See [Trusted publishing for npm packages](https://docs.npmjs.com/trusted-publishers/).

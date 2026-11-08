@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { avatarManifestSchema } from "@talking-avatar/formats";
+import { avatarManifestSchema } from "@asset-studio/formats";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

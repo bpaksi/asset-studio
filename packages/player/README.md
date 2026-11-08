@@ -1,20 +1,20 @@
-# @talking-avatar/player
+# @asset-studio/player
 
-`<TalkingAvatar>`: a React component that plays one line of a talking-avatar character folder with synced mouth shapes and a caption. MIT license.
+`<TalkingAvatar>`: a React component that plays one line of an asset-studio character folder with synced mouth shapes and a caption. MIT license.
 
 ```sh
-pnpm add @talking-avatar/player@0.1.0
+pnpm add @asset-studio/player@0.2.0
 ```
 
 `react` 18 or 19 is a peer dependency.
 
 ## Usage
 
-Serve the character folder ([asset contract v1](https://github.com/bpaksi/talking-avatar/blob/main/docs/asset-contract.md)) as static files, e.g. at `/avatars/keeper/`. The server must send `.m4a` as `audio/mp4` and answer `Range` requests with `206` (iPad Safari needs both).
+Serve the character folder ([asset contract v1](https://github.com/bpaksi/asset-studio/blob/main/docs/asset-contract.md)) as static files, e.g. at `/avatars/keeper/`. The server must send `.m4a` as `audio/mp4` and answer `Range` requests with `206` (iPad Safari needs both).
 
 ```tsx
-import { avatarManifestSchema } from "@talking-avatar/formats";
-import { TalkingAvatar } from "@talking-avatar/player";
+import { avatarManifestSchema } from "@asset-studio/formats";
+import { TalkingAvatar } from "@asset-studio/player";
 
 const manifest = avatarManifestSchema.parse(await (await fetch("/avatars/keeper/manifest.json")).json());
 
@@ -47,8 +47,8 @@ Behaviour:
 ## Example page
 
 ```sh
-pnpm --filter @talking-avatar/player example          # http://localhost:5173
-pnpm --filter @talking-avatar/player example --host   # reachable from an iPad on the same network
+pnpm --filter @asset-studio/player example          # http://localhost:5173
+pnpm --filter @asset-studio/player example --host   # reachable from an iPad on the same network
 ```
 
-It plays the Keeper fixture from `@talking-avatar/formats` (placeholder art and voice). Shape names are painted into the generated mouth PNGs; the player does not label frames.
+It plays the Keeper fixture from `@asset-studio/formats` (placeholder art and voice). Shape names are painted into the generated mouth PNGs; the player does not label frames.

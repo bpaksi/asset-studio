@@ -153,6 +153,8 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - The README says what asset-studio is. The asset contract keeps its name and its v2 number.
   - The release workflow publishes the `@asset-studio` names through trusted publishing. Releasing 0.2.0 of formats and player is a manual step for Bob, recorded here. (Bloodtower A1 step 1 can swap its pins as soon as these two are out.)
   - `npm deprecate` text for `@talking-avatar/formats` and `@talking-avatar/player` is written in CHANGELOG, for Bob to run.
+- Result: built on `feat/s1-rename-asset-studio`, stacked on this plan's revision PR (#14). Packages renamed to `@asset-studio/*` at 0.2.0, with exports and tests unchanged. `docs/camera-track-contract.md` and `docs/camera-track.schema.json` keep the old name for now, because open PR #13 edits them; that PR or a follow-up renames them. The P1 plan and the two 0.1.0 handoff notes stay as written, as history.
+- Bob's release (manual): once #14 and S1 are on `main`, run Actions → release → Run workflow on `main`. It publishes `@asset-studio/formats` then `@asset-studio/player` 0.2.0 over OIDC. Then run the two `npm deprecate` lines in CHANGELOG 0.2.0.
 
 ### S2: Job contract, index, notes and camera edits (formats)
 - Depends on: S1

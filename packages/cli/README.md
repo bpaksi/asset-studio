@@ -1,3 +1,3 @@
-# @talking-avatar/cli
+# @asset-studio/cli
 
-Build pipeline for talking-avatar. The scaffold re-exports the pause-aware TTS request builder. MIT license.
+Command-line build pipeline for asset-studio. The scaffold re-exports the pause-aware TTS request builder. MIT license.

@@ -1,4 +1,4 @@
-import { captionText, RHUBARB_LETTERS } from "@talking-avatar/formats";
+import { captionText, RHUBARB_LETTERS } from "@asset-studio/formats";
 
 /** Resolves a manifest path (relative to the avatar folder) against `baseUrl`, e.g. `/avatars/keeper/`. */
 export function assetUrl(baseUrl: string, path: string): string {

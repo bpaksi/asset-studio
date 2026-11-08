@@ -1,11 +1,11 @@
 {
-  "name": "@talking-avatar/formats",
-  "version": "0.1.0",
-  "description": "Asset contract schemas, the avatar folder validator, and lip-sync timing helpers for talking-avatar.",
+  "name": "@asset-studio/formats",
+  "version": "0.2.0",
+  "description": "Asset contract schemas, the avatar folder validator, and lip-sync timing helpers for asset-studio.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bpaksi/talking-avatar.git",
+    "url": "git+https://github.com/bpaksi/asset-studio.git",
     "directory": "packages/formats"
   },
   "type": "module",

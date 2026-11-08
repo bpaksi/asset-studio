@@ -1,5 +1,7 @@
 # Handoff: Track B — Keeper in Bloodtower
 
+> Historical: written for the 0.1.0 release under the old name. The packages are now `@asset-studio/formats` and `@asset-studio/player` (from 0.2.0), and the repo is `bpaksi/asset-studio`. See [CHANGELOG.md](../../CHANGELOG.md).
+
 For Claude Code. Repo: `bpaksi/bloodtower` (monorepo, local folder `DarkTower`), app `apps/bloodtower`. The web part is `src/web` (Next.js static export, package `bloodtower-web`); `pnpm build && pnpm start` serves it and `/ws` from `src/server` on port 4787. Board at `/board`; iPads at `/join` and `/device`. Target: iPad Safari only.
 
 Contract: [talking-avatar docs/asset-contract.md](https://github.com/bpaksi/talking-avatar/blob/main/docs/asset-contract.md).
