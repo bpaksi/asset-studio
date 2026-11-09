@@ -14,10 +14,12 @@ On npmjs.com, for each of the four packages, add a Trusted Publisher (Settings, 
 - Environment: leave blank (no environment)
 - Allowed actions: check **Allow `npm publish`**. Trusted publisher configurations created after 2026-09-03 default to `npm stage publish` only; direct `npm publish` is opt-in. This repo's Release workflow runs `npm publish`, so a new config that leaves that box unchecked will reject the first OIDC run. See [Trusted publishing for npm packages](https://docs.npmjs.com/trusted-publishers/).
 
+If the workflow's publish PUT fails with an npm `E404`, that package's trusted publisher does not match. Check the user, the repository name (without the owner), the `release.yml` filename only, a blank environment, and that **Allow `npm publish`** is ticked.
+
 Formats and player have theirs. A package must exist on npm before it can have a trusted publisher, so `@asset-studio/cli` and `@asset-studio/studio` need a one-time hand publish of a throwaway version first:
 
 1. On `main` after `pnpm install --frozen-lockfile`, set both to `0.2.1-bootstrap.0` without committing: `(cd packages/cli && npm version 0.2.1-bootstrap.0 --no-git-tag-version)`, and the same in `packages/studio`.
-2. `pnpm --filter ./packages/cli pack --pack-destination /tmp/boot`, the same for studio, then `npm publish <tarball> --access public --tag bootstrap` for each (the `bootstrap` tag keeps this version off `latest` until the 0.2.1 release moves it).
+2. `pnpm --filter ./packages/cli pack --pack-destination /tmp/boot`, the same for studio, then `npm publish <tarball> --access public --tag bootstrap` for each (npm sets `latest` to the bootstrap version on a first publish whatever `--tag` says, so `latest` and `bootstrap` both point at it; the first real release moves `latest`).
 3. `git checkout packages/cli/package.json packages/studio/package.json`.
 4. Add the Trusted Publishers above to both packages.
 
