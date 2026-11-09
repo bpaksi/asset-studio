@@ -2,7 +2,7 @@
 
 All four packages publish to npm at one version: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`.
 
-0.1.0 and the 0.2.0 of formats and player were published by hand. From 0.2.1 the `release.yml` workflow publishes all four with npm trusted publishing (GitHub Actions OIDC, no environment, no `NPM_TOKEN`) and provenance.
+0.1.0 and the 0.2.0 of formats and player were published by hand. 0.2.1 published formats and player only (npm refused cli). From 0.2.2 the `release.yml` workflow publishes all four with npm trusted publishing (GitHub Actions OIDC, no environment, no `NPM_TOKEN`) and provenance.
 
 ## One-time npm setup
 

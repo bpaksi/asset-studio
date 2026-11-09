@@ -18,7 +18,7 @@ First full release of all four packages together: `@asset-studio/formats`, `@ass
 
 ## 0.2.1 (partial: formats and player only)
 
-Intended as the first release of all four packages together: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`, all at `0.2.1`, published by the release workflow with provenance. `@asset-studio/cli` and `@asset-studio/studio` are public from this version. Formats and player 0.2.0 were published by hand and stay on npm. Player is unchanged in 0.2.1. Formats adds the job contract schemas (`jobSchema`, `derivedIds`, the index, notes and camera-edit schemas), additively; nothing existing changes.
+Intended as the first release of all four packages together: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`, all at `0.2.1`, published by the release workflow with provenance. `@asset-studio/cli` and `@asset-studio/studio` first went public at 0.2.2; only `0.2.1-bootstrap.0` throwaways exist for 0.2.1. Formats and player 0.2.0 were published by hand and stay on npm. Player is unchanged in 0.2.1. Formats adds the job contract schemas (`jobSchema`, `derivedIds`, the index, notes and camera-edit schemas), additively; nothing existing changes.
 
 Only formats and player 0.2.1 were published; cli and studio 0.2.1 never reached npm (see 0.2.2).
 
@@ -43,9 +43,9 @@ npm trusted publishers can only be added to a package that exists, and cli and s
    npm publish /tmp/boot/asset-studio-studio-0.2.1-bootstrap.0.tgz --access public --tag bootstrap
    git checkout packages/cli/package.json packages/studio/package.json
    ```
-   `pnpm pack` rewrites `workspace:*` to the versions in the tree, so the studio bootstrap tarball depends on `@asset-studio/cli@0.2.1-bootstrap.0`. Nobody should install these two. The `bootstrap` tag only keeps this version off `latest` until the 0.2.1 release moves `latest`.
+   `pnpm pack` rewrites `workspace:*` to the versions in the tree, so the studio bootstrap tarball depends on `@asset-studio/cli@0.2.1-bootstrap.0`. Nobody should install these two. npm set `latest` to the bootstrap version anyway (a package's first publish gets `latest`); 0.2.2 moved it.
 3. On npmjs.com add a Trusted Publisher to `@asset-studio/cli` and `@asset-studio/studio` (user `bpaksi`, repository `asset-studio`, workflow `release.yml`, no environment, allow `npm publish`). Formats and player already have theirs.
-4. Run the **release** workflow on `main`. It refuses to run if any of the four `0.2.1` versions is already on npm, then publishes formats, player, cli, studio with provenance.
+4. Run the **release** workflow on `main` (the 0.2.1 run was partial; 0.2.2 published all four). It refuses to run if any of the four versions is already on npm, then publishes formats, player, cli, studio with provenance.
 5. Optionally `npm deprecate '@asset-studio/cli@0.2.1-bootstrap.0' 'bootstrap only'` (same for studio).
 
 See `docs/releasing.md`.
