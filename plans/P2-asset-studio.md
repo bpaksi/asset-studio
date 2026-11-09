@@ -176,7 +176,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio needs <asset-job.json>` lists every ID from `derivedIds` (in 0.2, a mood's portrait is listed as a still), each with its kind and its status from the index. `--json` prints the list as JSON.
   - `asset-studio approve <job> <id>` and `reject <job> <id> --note "<text>"` set the status in the index, and the note also goes to `notes.json`. These are the only ways to set `final` or `rejected`.
   - The store writes content-addressed files and never overwrites. Two runs with the same inputs give one file. Tests use temp folders.
-- Result: built before this record; store correctness fixed afterwards: the brief ([#20](https://github.com/bpaksi/asset-studio/pull/20)) and the per-story lock that serializes store mutations and keeps reject consistent ([#22](https://github.com/bpaksi/asset-studio/pull/22)).
+- Result: built in [#17](https://github.com/bpaksi/asset-studio/pull/17); store correctness fixed afterwards: the brief ([#20](https://github.com/bpaksi/asset-studio/pull/20)) and the per-story lock that serializes store mutations and keeps reject consistent ([#22](https://github.com/bpaksi/asset-studio/pull/22)).
 
 ### S3-seam: Command registry and placeholder commands
 - Depends on: S3
