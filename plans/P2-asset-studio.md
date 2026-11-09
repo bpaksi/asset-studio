@@ -176,6 +176,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio needs <asset-job.json>` lists every ID from `derivedIds` (in 0.2, a mood's portrait is listed as a still), each with its kind and its status from the index. `--json` prints the list as JSON.
   - `asset-studio approve <job> <id>` and `reject <job> <id> --note "<text>"` set the status in the index, and the note also goes to `notes.json`. These are the only ways to set `final` or `rejected`.
   - The store writes content-addressed files and never overwrites. Two runs with the same inputs give one file. Tests use temp folders.
+- Result: built in [#17](https://github.com/bpaksi/asset-studio/pull/17); store correctness fixed afterwards: the brief ([#20](https://github.com/bpaksi/asset-studio/pull/20)) and the per-story lock that serializes store mutations and keeps reject consistent ([#22](https://github.com/bpaksi/asset-studio/pull/22)).
 
 ### S3-seam: Command registry and placeholder commands
 - Depends on: S3
@@ -189,6 +190,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `--ai` runs the source renderers first, then the AI renderers fill what is still missing (S6).
   - A command may set `needsWorkFolder: false` (default true); `studio` does, so a first start with no folder reaches the command.
   - Tests cover each command's flags, the `AS-CONFIG-1` path, the coded failures, and the renderer registry with a fake renderer.
+- Result: built in [#21](https://github.com/bpaksi/asset-studio/pull/21): async dispatcher, command registry, placeholders for render, export and studio. [#26](https://github.com/bpaksi/asset-studio/pull/26) then passed the job folder to renderers as a fourth argument.
 
 ### S4: Voice (P1 S3)
 - Depends on: S3
@@ -198,6 +200,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio render <job> --only voice` makes a WAV master in `masters/` and an m4a draft in the store, with macOS `afconvert`, for each line. Its index entry is `draft`.
   - The Gemini key is read from `GEMINI_API_KEY` and is never written to the index, notes or logs. A missing key fails with `AS-VOICE-1`.
   - Every failed line is logged with its id and code, and the run ends non-zero with a count.
+- Result: built in [#24](https://github.com/bpaksi/asset-studio/pull/24): voice renderer, TTS provider seam, Gemini adapter, job sounds as drafts. Deviations: the model is in the cache key; truncated WAV and decode failures are `AS-VOICE-6`; blank lines fail `AS-VOICE-10` before any call. Tested with mocked fetch only; the live Gemini API was not run.
 
 ### S5: Pictures, stills and glow masks
 - Depends on: S3
@@ -206,6 +209,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `render --only picture` makes one WebP per picture and profile from its `source`, cropped by cover to the profile's size, and one WebP per cast mood at the `portrait` profile from its portrait `source`. The master is kept in `masters/`.
   - A glow mask placed by hand (`masters/glow.<entry>.png`) is checked as greyscale at the painting's exact size, then stored as WebP. A wrong size fails with `AS-GLOW-1` and both sizes.
   - Uses `sharp`, at an exact pin. This is the only step in its batch that changes dependencies.
+- Result: built in [#25](https://github.com/bpaksi/asset-studio/pull/25), with `sharp` 0.35.5 pinned exactly. Deviation: a master whose bytes change is kept as `masters/<id>.<8 hex>.<ext>`, with one line logged.
 
 ### S6: AI mode for pictures, stills and glow masks
 - Depends on: S5
@@ -215,6 +219,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `render --ai` makes every `missing` picture, mood still and glow mask as a draft: stills from the cast references and the job style, pictures from the prompt and the style, glow masks for pictures with `glow: true`.
   - A note in `notes.json` for an id goes into that id's next request and is cleared once the new draft is stored.
   - Every provider error is logged with the id and a code. A failed asset stays `missing`, and the run goes on with the next.
+- Result: built in [#29](https://github.com/bpaksi/asset-studio/pull/29) with a fake-provider test. Deviation: a glow mask is requested at the painting's master size and kept as `masters/glow.<entry>.png`. The live Gemini image API and its default model `gemini-2.5-flash-image` are untested.
 
 ### S7: Studio, review
 - Depends on: S3
@@ -227,6 +232,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - Approve sets `final`. Reject sets `rejected` with a note, which also goes to `notes.json`. Both go through the CLI library, never by editing JSON in the page.
   - Every error the person causes shows on the page with its code.
   - Viewports: 1440×900 desktop.
+- Result: built in [#27](https://github.com/bpaksi/asset-studio/pull/27) as `@asset-studio/studio` 0.2.0: a Node `http` server on 127.0.0.1 and one plain page, loaded by dynamic import. Deviation: `studio` gains `--job` and `--port`. The e2e uses `playwright` 1.65.0 (dev, exact pin).
 
 ### S8: Export
 - Depends on: S3
@@ -235,6 +241,7 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `asset-studio export <job> --out <folder> [--drafts]` copies every `final` asset (and every `draft` with `--drafts`) into the folder as `<hash>.<ext>`, and writes `export-index.json`: for each ID its kind, file, pixel size or length, status, and for a line its speaker and text. It also copies the job's `source` hash.
   - It never exports `rejected` or `missing` assets, masters or WAVs. A test covers each.
   - `docs/export-contract.md` documents the folder, so the consumer's packaging (Bloodtower A1 step 5) is built against it.
+- Result: built in [#23](https://github.com/bpaksi/asset-studio/pull/23), with `docs/export-contract.md`; [#28](https://github.com/bpaksi/asset-studio/pull/28) switched it to S5's shared asset keys. Deviation: the `export-index.json` shape (`{schema, story, source, assets}`) was chosen in the PR because the plan did not fix it.
 
 ### S9: Release 0.2.x
 - Depends on: S4, S5, S6, S7, S8
@@ -243,6 +250,8 @@ Each move eases in and out and never goes past the picture's edge. With reduced 
   - `@asset-studio/cli` and `@asset-studio/studio` are public.
   - A release run by hand from Actions (`workflow_dispatch` on `main`, no tag) publishes all four packages with provenance.
   - A fresh folder can install from npm and run `needs`, `render` (with the fake providers) and `export` against the repo's example job.
+- Result: released as 0.2.2 on 2026-11-09. Prep in [#30](https://github.com/bpaksi/asset-studio/pull/30), fake providers (`ASSET_STUDIO_FAKE_PROVIDERS`) in [#31](https://github.com/bpaksi/asset-studio/pull/31), bump in [#32](https://github.com/bpaksi/asset-studio/pull/32). The 0.2.1 run was partial: formats and player published, cli refused by npm (trusted publisher misconfigured), studio never attempted. 0.2.2 published all four with provenance, verified by a fresh-folder npm install running `needs`, `render`, `approve`, `export` and the fake-provider flow.
+- Open after 0.2: `studio` approve does not print `AS-FAKE-3`; the release workflow is not yet in a GitHub environment with required reviewers; picture outputs have no size check.
 
 ---
 
