@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.2.1
+## 0.2.2
 
-First release of all four packages together: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`, all at `0.2.1`, published by the release workflow with provenance. `@asset-studio/cli` and `@asset-studio/studio` are public from this version. Formats and player 0.2.0 were published by hand and stay on npm. Player is unchanged in 0.2.1. Formats adds the job contract schemas (`jobSchema`, `derivedIds`, the index, notes and camera-edit schemas), additively; nothing existing changes.
+First full release of all four packages together: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`, all at `0.2.2`, published by the release workflow with provenance. The 0.2.1 run published only formats and player; npm refused cli (a trusted-publisher setting did not match) and studio was never attempted. So the first real release of `@asset-studio/cli` and `@asset-studio/studio` is 0.2.2, and formats and player 0.2.2 are unchanged from 0.2.1. The content below is the same as 0.2.1.
 
 ### For consumers (P2 S2 to S8)
 
@@ -39,6 +39,14 @@ npm trusted publishers can only be added to a package that exists, and cli and s
 5. Optionally `npm deprecate '@asset-studio/cli@0.2.1-bootstrap.0' 'bootstrap only'` (same for studio).
 
 See `docs/releasing.md`.
+
+## 0.2.1 (partial: formats and player only)
+
+Intended as the first release of all four packages together: `@asset-studio/formats`, `@asset-studio/player`, `@asset-studio/cli` and `@asset-studio/studio`, all at `0.2.1`, published by the release workflow with provenance. `@asset-studio/cli` and `@asset-studio/studio` are public from this version. Formats and player 0.2.0 were published by hand and stay on npm. Player is unchanged in 0.2.1. Formats adds the job contract schemas (`jobSchema`, `derivedIds`, the index, notes and camera-edit schemas), additively; nothing existing changes.
+
+Only formats and player 0.2.1 were published; cli and studio 0.2.1 never reached npm (see 0.2.2).
+
+(The 0.2.1 notes for consumers are the same as 0.2.2 above.)
 
 ## 0.2.0 — released (formats and player, by hand)
 

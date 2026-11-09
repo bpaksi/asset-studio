@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const packages = ["formats", "player", "cli", "studio"] as const;
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 type Manifest = {
   version?: string;
